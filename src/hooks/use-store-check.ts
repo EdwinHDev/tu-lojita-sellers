@@ -6,12 +6,21 @@ import { CheckHasStoreUseCase } from "@/application/use-cases/store/check-has-st
 
 export type StoreStatus = "checking" | "has-store" | "no-store";
 
+export interface StoreState {
+  status: StoreStatus;
+  storeId: string | null;
+  storeName: string | null;
+}
+
 /**
  * Hook para centralizar la comprobación de la existencia de una tienda para el usuario.
- * @returns StoreStatus
  */
-export function useStoreCheck() {
-  const [status, setStatus] = useState<StoreStatus>("checking");
+export function useStoreCheck(): StoreState {
+  const [state, setState] = useState<StoreState>({
+    status: "checking",
+    storeId: null,
+    storeName: null,
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -21,12 +30,14 @@ export function useStoreCheck() {
     checkHasStoreUseCase.execute()
       .then((result) => {
         if (!isMounted) return;
-        setStatus(result.hasStore ? "has-store" : "no-store");
+        setState({
+          status: result.hasStore ? "has-store" : "no-store",
+          storeId: result.storeId,
+          storeName: result.storeName,
+        });
       })
       .catch(() => {
-        // En caso de error (ej: no autenticado), se asume no-store.
-        // El AuthGuard padre es el responsable de redirigir al login si es necesario.
-        if (isMounted) setStatus("no-store");
+        if (isMounted) setState({ status: "no-store", storeId: null, storeName: null });
       });
 
     return () => {
@@ -34,5 +45,5 @@ export function useStoreCheck() {
     };
   }, []);
 
-  return status;
+  return state;
 }

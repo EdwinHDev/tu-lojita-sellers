@@ -24,6 +24,21 @@ export interface CreateStorePayload {
 }
 
 /**
+ * Payload para actualizar una tienda.
+ * El RIF NO puede ser actualizado según requerimientos de negocio.
+ */
+export interface UpdateStorePayload {
+  name?: string;
+  description?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  logo?: string;
+  categoryId?: string;
+}
+
+/**
  * Entidad de Dominio: Store
  * Refleja la respuesta del backend al crear/obtener una tienda.
  */
@@ -37,8 +52,23 @@ export interface Store {
   city: string;
   state: string;
   logo: string;
-  categoryId: string;
+  categoryId: string; // Puede venir plano o dentro del objeto category
+  category?: {
+    id: string;
+    name: string;
+  };
   ownerId: string;
+  owner?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  company?: {
+    id: string;
+    name: string;
+    logo?: string;
+  };
   createdAt: string;
   updatedAt: string;
 }

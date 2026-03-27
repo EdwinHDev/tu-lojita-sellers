@@ -20,7 +20,7 @@ export function StoreAccessGuard({
   requiredStatus, 
   redirectTo 
 }: StoreAccessGuardProps) {
-  const status = useStoreCheck();
+  const { status } = useStoreCheck();
   const router = useRouter();
 
   useEffect(() => {

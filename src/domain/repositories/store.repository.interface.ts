@@ -1,4 +1,4 @@
-import type { HasStoreResponse, CreateStorePayload, Store } from "@/domain/entities/store.entity";
+import type { HasStoreResponse, CreateStorePayload, Store, UpdateStorePayload } from "@/domain/entities/store.entity";
 
 /**
  * Contrato del Repositorio de Tiendas.
@@ -14,4 +14,16 @@ export interface IStoreRepository {
    * Crea una nueva tienda en el backend con el payload completo.
    */
   createStore(payload: CreateStorePayload): Promise<Store>;
+
+  /**
+   * Obtiene la información completa de una tienda por su ID.
+   */
+  getStoreById(id: string): Promise<Store>;
+
+  /**
+   * Actualiza la información de una tienda.
+   * @param id ID de la tienda
+   * @param payload Datos a actualizar
+   */
+  updateStore(id: string, payload: UpdateStorePayload): Promise<Store>;
 }
