@@ -64,6 +64,7 @@ export interface Item {
   title: string;
   description: string;
   price: number;
+  mainImage: string;
   images: string[];
   itemType: ItemType;
   trackInventory: boolean;
@@ -87,6 +88,7 @@ export interface CreateItemPayload {
   categoryId?: string;
   description: string;
   price?: number;
+  mainImage: string;
   images: string[];
   itemType: ItemType;
   trackInventory?: boolean;

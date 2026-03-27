@@ -22,6 +22,7 @@ interface ImageCropperProps {
   initialPreviewUrl?: string | null;
   label?: string;
   className?: string;
+  hidePreviewAfterCrop?: boolean;
 }
 
 /**
@@ -94,6 +95,7 @@ export function ImageCropper({
   initialPreviewUrl = null,
   label = "Subir Imagen",
   className = "",
+  hidePreviewAfterCrop = false,
 }: ImageCropperProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
@@ -154,9 +156,16 @@ export function ImageCropper({
           backgroundColor
         );
         const url = URL.createObjectURL(croppedFile);
-        setPreviewUrl(url);
+        
+        if (!hidePreviewAfterCrop) {
+          setPreviewUrl(url);
+        } else {
+          setPreviewUrl(null);
+        }
+        
         onCropComplete(croppedFile);
         setIsCropping(false);
+        setImageSrc(null); // Reset source to allow re-uploading the same file if needed
       } catch (e) {
         console.error(e);
       }
@@ -185,18 +194,18 @@ export function ImageCropper({
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <div className="flex flex-col items-center gap-2 text-white">
                   <Upload01Icon size={24} />
-                  <span className="text-xs font-bold uppercase tracking-wider">Cambiar Imagen</span>
+                  <span className="text-xs font-bold uppercase tracking-wider">Cambiar</span>
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center gap-3 text-gray-400 dark:text-gray-600">
-              <div className="h-12 w-12 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
-                <Image01Icon size={24} />
+            <div className="flex flex-col items-center gap-3 text-gray-400 dark:text-gray-600 group-hover:text-indigo-500 transition-colors">
+              <div className="h-12 w-12 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm group-hover:shadow-indigo-500/10 group-hover:scale-110 transition-all">
+                <Upload01Icon size={24} />
               </div>
               <div className="text-center px-4">
-                <p className="text-sm font-bold text-gray-700 dark:text-gray-300">{label}</p>
-                <p className="text-[10px] font-medium mt-1">PNG, JPG hasta 5MB</p>
+                <p className="text-sm font-black uppercase tracking-tight">{label}</p>
+                <p className="text-[10px] font-medium mt-1">PNG, JPG o WEBP</p>
               </div>
             </div>
           )}

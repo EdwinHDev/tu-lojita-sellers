@@ -29,16 +29,40 @@ export class MediaRepositoryImpl {
     return response.json();
   }
 
-  async delete(id: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/img/${id}`, {
-      method: "DELETE",
+  async uploadBulk(files: File[], primaryIndex: number): Promise<any> {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append("files", file);
+    });
+    formData.append("primaryIndex", primaryIndex.toString());
+
+    const response = await fetch(`${this.baseUrl}/upload/bulk`, {
+      method: "POST",
       headers: {
         "x-api-key": this.apiKey,
       },
+      body: formData,
     });
 
     if (!response.ok) {
-      console.warn(`No se pudo eliminar la imagen ${id} durante el rollback.`);
+      throw new Error("Error al subir las imágenes en lote.");
+    }
+
+    return response.json();
+  }
+
+  async deleteBulk(ids: string[]): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/img/bulk-delete`, {
+      method: "POST",
+      headers: {
+        "x-api-key": this.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ids }),
+    });
+
+    if (!response.ok) {
+      console.warn(`No se pudieron eliminar las imágenes en lote durante el rollback.`);
     }
   }
 }

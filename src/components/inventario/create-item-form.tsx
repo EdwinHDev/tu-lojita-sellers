@@ -27,6 +27,7 @@ import {
   FieldError,
 } from "@/components/ui/field";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { ItemType } from "@/domain/entities/item.entity";
 import { StoreCategory } from "@/domain/entities/store-category.entity";
 import { ItemRepositoryImpl } from "@/infrastructure/repositories/item.repository.impl";
@@ -35,22 +36,33 @@ import { CreateItemUseCase } from "@/application/use-cases/item/create-item.use-
 import { GetStoreCategoriesUseCase } from "@/application/use-cases/category/get-store-categories.use-case";
 import { CreateCategorySheet } from "./create-category-sheet";
 import { ImageCropper } from "@/components/ui/image-cropper";
-import { uploadImageAction } from "@/app/actions/media.actions";
+import { uploadImagesAction, deleteImagesAction } from "@/app/actions/media.actions";
+import { getOptimizedImageUrl, IMAGE_PRESETS } from "@/lib/images";
+import { StarIcon } from "hugeicons-react";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
 const itemSchema = z.object({
   title: z.string().min(3, "El título debe tener al menos 3 caracteres").max(100),
-  description: z.string().min(10, "La descripción debe tener al menos 10 caracteres").max(1000),
+  description: z.string().min(10, "La descripción debe tener al menos 10 caracteres").max(2000),
   itemType: z.nativeEnum(ItemType),
-  price: z.number().min(0, "El precio no puede ser negativo").optional(),
-  categoryId: z.string().uuid("Seleccione una categoría válida").optional(),
+  price: z.preprocess((val) => (val === "" || val === null || (typeof val === "number" && isNaN(val)) ? undefined : Number(val)), z.number().min(0).optional()) as any,
+  categoryId: z.string().uuid("Seleccione una categoría válida").optional().or(z.literal("")),
   trackInventory: z.boolean(),
-  stockQuantity: z.number().min(0).optional(),
+  stockQuantity: z.preprocess((val) => (val === "" || val === null || (typeof val === "number" && isNaN(val)) ? undefined : Number(val)), z.number().min(0).optional()) as any,
   requiresBooking: z.boolean(),
 });
 
-type ItemFormValues = z.infer<typeof itemSchema>;
+export type ItemFormValues = {
+  title: string;
+  description: string;
+  itemType: ItemType;
+  price?: number;
+  categoryId?: string;
+  trackInventory: boolean;
+  stockQuantity?: number;
+  requiresBooking: boolean;
+};
 
 // ─── Components ───────────────────────────────────────────────────────────────
 
@@ -70,8 +82,9 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
   const [categories, setCategories] = useState<StoreCategory[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
-  const [images, setImages] = useState<string[]>([]);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [pendingImages, setPendingImages] = useState<{ file: File; preview: string }[]>([]);
+  const [primaryIndex, setPrimaryIndex] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   const {
     register,
@@ -80,7 +93,7 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
     setValue,
     formState: { errors },
   } = useForm<ItemFormValues>({
-    resolver: zodResolver(itemSchema),
+    resolver: zodResolver(itemSchema) as any,
     defaultValues: {
       itemType: ItemType.PRODUCT,
       trackInventory: true,
@@ -90,6 +103,8 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
 
   const selectedType = watch("itemType");
   const isTrackingInventory = watch("trackInventory");
+  const titleValue = watch("title") || "";
+  const descriptionValue = watch("description") || "";
 
   // Load categories
   const loadCategories = async () => {
@@ -109,51 +124,115 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
     loadCategories();
   }, [storeId]);
 
-  const handleImageUpload = async (file: File) => {
-    setUploadingImage(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const result = await uploadImageAction(formData);
-      if (result.status === "success" && result.data?.url) {
-        setImages((prev) => [...prev, result.data!.url!]);
-      }
-    } catch (error) {
-      console.error("Image upload failed:", error);
-    } finally {
-      setUploadingImage(false);
-    }
+  const handleImageAdd = (file: File) => {
+    const preview = URL.createObjectURL(file);
+    setPendingImages((prev) => [...prev, { file, preview }]);
+    setImageError(null);
   };
 
   const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    setPendingImages((prev) => {
+      const newImages = prev.filter((_, i) => i !== index);
+      // Clean up object URL to avoid memory leaks
+      URL.revokeObjectURL(prev[index].preview);
+      return newImages;
+    });
+    
+    // Adjust primary index if needed
+    if (primaryIndex === index) {
+      setPrimaryIndex(0);
+    } else if (primaryIndex > index) {
+      setPrimaryIndex(primaryIndex - 1);
+    }
   };
 
   const onSubmit = async (values: ItemFormValues) => {
-    if (images.length === 0) {
-      alert("Debe subir al menos una imagen.");
+    if (pendingImages.length === 0) {
+      setImageError("Debe subir al menos una imagen.");
+      const imagesSection = document.getElementById("images-section");
+      imagesSection?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
     setIsSubmitting(true);
+    let uploadedIds: string[] = [];
+
     try {
-      await createItemUseCase.execute({
+      // 1. Bulk Upload Images
+      const formData = new FormData();
+      pendingImages.forEach((item) => formData.append("files", item.file));
+      formData.append("primaryIndex", primaryIndex.toString());
+
+      const uploadResult = await uploadImagesAction(formData);
+      
+      if (uploadResult.status !== "success") {
+        throw new Error(uploadResult.error || "Error al subir imágenes");
+      }
+
+      const uploadedData = uploadResult.data as { id: string; url: string; isPrimary: boolean }[];
+      uploadedIds = uploadedData.map(img => img.id);
+      
+      // Backend expects absolute URLs for @IsUrl validation
+      const SERVER_URL = "http://localhost:4200";
+      const imageUrls = uploadedData.map(img => `${SERVER_URL}${img.url}`);
+      const mainImage = uploadedData.find(img => img.isPrimary) 
+        ? `${SERVER_URL}${uploadedData.find(img => img.isPrimary)?.url}` 
+        : imageUrls[0];
+
+      // Clean categoryId if it's empty string
+      const finalValues = {
         ...values,
+        categoryId: values.categoryId === "" ? undefined : values.categoryId,
+        trackInventory: values.itemType === ItemType.PRODUCT ? values.trackInventory : false,
+        requiresBooking: values.itemType === ItemType.SERVICE ? true : values.requiresBooking,
+      };
+
+      // 2. Create Item with URLs
+      await createItemUseCase.execute({
+        ...finalValues,
         storeId,
-        images,
-        attributes: {}, // For now, empty attributes. Can be expanded per type.
+        mainImage,
+        images: imageUrls,
+        attributes: {},
       });
+      
       onSuccess();
     } catch (error) {
-      console.error("Error creating item:", error);
+      console.error("Submission error:", error);
+      
+      // Rollback: Delete uploaded images if item creation failed
+      if (uploadedIds.length > 0) {
+        console.warn("Rolling back uploaded images:", uploadedIds);
+        await deleteImagesAction(uploadedIds);
+      }
+
+      alert(error instanceof Error ? error.message : "Error al crear el item");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const onInvalid = (errors: any) => {
+    console.warn("Validation errors:", errors);
+    const firstError = Object.keys(errors)[0];
+    const element = document.getElementsByName(firstError)[0];
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      (element as HTMLElement).focus();
+    }
+    
+    if (pendingImages.length === 0) {
+      setImageError("Debe subir al menos una imagen.");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-950">
-      <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-24">
+      <form 
+        id="create-item-form"
+        onSubmit={handleSubmit(onSubmit, onInvalid)} 
+        className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-24"
+      >
         
         {/* Section: Basic Info */}
         <section className="space-y-6">
@@ -165,20 +244,42 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
           </div>
 
           <Field>
-            <FieldLabel>Título del {selectedType === ItemType.PRODUCT ? "Producto" : "Servicio"}</FieldLabel>
+            <div className="flex items-center justify-between mb-2">
+              <FieldLabel>Título del {selectedType === ItemType.PRODUCT ? "Producto" : "Servicio"}</FieldLabel>
+              <span className={cn(
+                "text-[10px] font-bold",
+                titleValue.length > 100 ? "text-red-500" : "text-gray-400"
+              )}>
+                {titleValue.length}/100
+              </span>
+            </div>
             <Input 
               {...register("title")} 
               placeholder="Ej. iPhone 15 Pro, Limpieza Dental, Torta de Chocolate..." 
-              className="rounded-xl border-gray-200 dark:border-gray-800"
+              className={cn(
+                "rounded-xl border-gray-200 dark:border-gray-800",
+                errors.title && "border-red-500 ring-1 ring-red-500/20"
+              )}
             />
             <FieldError errors={[errors.title]} />
           </Field>
 
           <Field>
-            <FieldLabel>Descripción Detallada</FieldLabel>
+            <div className="flex items-center justify-between mb-2">
+              <FieldLabel>Descripción Detallada</FieldLabel>
+              <span className={cn(
+                "text-[10px] font-bold",
+                descriptionValue.length > 1000 ? "text-red-500" : "text-gray-400"
+              )}>
+                {descriptionValue.length}/1000
+              </span>
+            </div>
             <textarea 
               {...register("description")} 
-              className="min-h-[100px] w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 resize-none"
+              className={cn(
+                "min-h-[100px] w-full rounded-xl border bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 resize-none",
+                errors.description ? "border-red-500 ring-1 ring-red-500/20" : "border-gray-200 dark:border-gray-800"
+              )}
               placeholder="Describe las características principales..."
             />
             <FieldError errors={[errors.description]} />
@@ -297,62 +398,110 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
         <Separator className="bg-gray-100 dark:bg-gray-800" />
 
         {/* Section: Images */}
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
-              <Image01Icon size={18} className="text-indigo-600" />
+        <section id="images-section" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+                <Image01Icon size={18} className="text-indigo-600" />
+              </div>
+              <h2 className="text-lg font-bold">Imágenes</h2>
             </div>
-            <h2 className="text-lg font-bold">Imágenes</h2>
+            <div className="flex items-center gap-3">
+              {imageError && (
+                <p className="text-[10px] font-bold text-red-500 animate-bounce">
+                  {imageError}
+                </p>
+              )}
+              <div className="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
+                <p className="text-[10px] font-black uppercase tracking-wider text-gray-500">
+                  {pendingImages.length} / 5 fotos
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
             <AnimatePresence>
-              {images.map((url, i) => (
+              {pendingImages.map((img, i) => (
                 <motion.div 
-                  key={url}
+                  key={img.preview}
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  className="relative aspect-square rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden group shadow-sm"
+                  className={cn(
+                    "relative aspect-square rounded-2xl border overflow-hidden group shadow-sm transition-all",
+                    primaryIndex === i 
+                      ? "border-indigo-500 ring-2 ring-indigo-500/20" 
+                      : "border-gray-100 dark:border-gray-800"
+                  )}
                 >
-                  <img src={url} alt="Producto" className="h-full w-full object-cover" />
+                  <img 
+                    src={img.preview} 
+                    alt="Producto" 
+                    className="h-full w-full object-cover" 
+                  />
+                  
+                  {/* Primary Selector Overlay */}
+                  <button
+                    type="button"
+                    onClick={() => setPrimaryIndex(i)}
+                    className={cn(
+                      "absolute top-2 left-2 p-1.5 rounded-lg backdrop-blur-md transition-all",
+                      primaryIndex === i
+                        ? "bg-indigo-600 text-white shadow-lg"
+                        : "bg-black/20 text-white/50 hover:bg-black/40 opacity-0 group-hover:opacity-100"
+                    )}
+                    title="Marcar como imagen principal"
+                  >
+                    <StarIcon size={14} fill={primaryIndex === i ? "currentColor" : "none"} />
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => removeImage(i)}
-                    className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 p-1.5 bg-black/20 hover:bg-red-500/80 text-white rounded-lg backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all"
                   >
-                    <Delete02Icon className="text-white" size={20} />
+                    <Delete02Icon size={14} />
                   </button>
+
+                  {primaryIndex === i && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-indigo-600 py-1 px-2">
+                       <p className="text-[8px] font-black text-white uppercase text-center tracking-widest">Portada</p>
+                    </div>
+                  )}
                 </motion.div>
               ))}
             </AnimatePresence>
             
-            <ImageCropper
-              onCropComplete={handleImageUpload}
-              outputSize={{ width: 800, height: 800 }}
-              label="Añadir imagen"
-              className="aspect-square"
-            />
+            {pendingImages.length < 5 && (
+              <ImageCropper
+                onCropComplete={handleImageAdd}
+                outputSize={{ width: 800, height: 800 }}
+                label="Añadir"
+                className="aspect-square"
+                hidePreviewAfterCrop={true}
+              />
+            )}
           </div>
         </section>
 
       </form>
 
       {/* Footer Actions */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-3">
+      <div className="sticky bottom-0 left-0 right-0 p-6 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-3 z-10 -mx-8 -mb-8 mt-8">
         <Button 
           type="button" 
           variant="ghost" 
           onClick={onCancel}
-          className="font-bold text-gray-500 py-6 px-8 rounded-2xl"
+          className="font-bold text-gray-500 h-12 px-6 rounded-2xl"
         >
           Descartar
         </Button>
         <Button 
           type="submit" 
+          form="create-item-form"
           disabled={isSubmitting}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white py-6 px-10 rounded-2xl font-black shadow-xl shadow-indigo-600/20 min-w-[180px]"
-          onClick={handleSubmit(onSubmit)}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-8 rounded-2xl font-black shadow-xl shadow-indigo-600/20"
         >
           {isSubmitting ? (
             <Loading03Icon className="animate-spin" />

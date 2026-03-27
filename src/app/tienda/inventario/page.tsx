@@ -8,12 +8,13 @@ import { ItemRepositoryImpl } from "@/infrastructure/repositories/item.repositor
 import { GetItemsUseCase } from "@/application/use-cases/item/get-items.use-case";
 import { Item, ItemType } from "@/domain/entities/item.entity";
 import { CreateItemForm } from "@/components/inventario/create-item-form";
+import { getOptimizedImageUrl, IMAGE_PRESETS } from "@/lib/images";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -28,7 +29,7 @@ export default function InventarioPage() {
   const { storeId } = useStoreCheck();
   const [items, setItems] = useState<Item[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchItems = async () => {
@@ -84,7 +85,7 @@ export default function InventarioPage() {
             <p className="text-xs sm:text-sm text-gray-500 font-medium">Administra tus productos, servicios y stock en tiempo real.</p>
           </div>
           <Button 
-            onClick={() => setIsSheetOpen(true)}
+            onClick={() => setIsDialogOpen(true)}
             className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 px-6 rounded-2xl shadow-xl shadow-indigo-600/20 transition-all active:scale-95 gap-2"
           >
             <PlusSignIcon size={18} strokeWidth={2.5} />
@@ -126,7 +127,7 @@ export default function InventarioPage() {
               Comienza agregando productos físicos o servicios profesionales para que tus clientes puedan comprarlos.
             </p>
             <Button 
-              onClick={() => setIsSheetOpen(true)}
+              onClick={() => setIsDialogOpen(true)}
               variant="outline" 
               className="mt-8 rounded-xl border-gray-200 dark:border-gray-800 font-bold hover:bg-gray-50 dark:hover:bg-gray-800"
             >
@@ -154,7 +155,11 @@ export default function InventarioPage() {
                     <div className="flex items-center gap-3 sm:gap-4">
                       <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden shrink-0 border border-gray-100 dark:border-gray-800">
                         {item.images[0] ? (
-                          <img src={item.images[0]} alt="" className="h-full w-full object-cover" />
+                          <img 
+                            src={getOptimizedImageUrl(item.images[0], IMAGE_PRESETS.THUMBNAIL_MD)} 
+                            alt="" 
+                            className="h-full w-full object-cover" 
+                          />
                         ) : (
                           <div className="h-full w-full flex items-center justify-center">
                             <PackageIcon size={16} className="text-gray-300" />
@@ -211,24 +216,32 @@ export default function InventarioPage() {
         </div>
       )}
 
-      {/* Creation Sheet */}
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-xl p-0 border-l border-gray-100 dark:border-gray-800">
-          <SheetHeader className="p-6 border-b border-gray-50 dark:border-gray-900 bg-white/50 dark:bg-gray-950/50 backdrop-blur-md sticky top-0 z-10">
-            <SheetTitle className="text-2xl font-black tracking-tight">Crear Nuevo Item</SheetTitle>
-          </SheetHeader>
-          {storeId && (
-            <CreateItemForm 
-              storeId={storeId} 
-              onSuccess={() => {
-                setIsSheetOpen(false);
-                fetchItems();
-              }} 
-              onCancel={() => setIsSheetOpen(false)} 
-            />
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Creation Modal */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar p-0">
+          <DialogHeader className="p-8 border-b border-gray-50 dark:border-gray-900 bg-white/50 dark:bg-black/40 backdrop-blur-md sticky top-0 z-10 sm:text-left flex-row items-center gap-4">
+             <div className="h-12 w-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center shrink-0">
+                <PlusSignIcon size={24} className="text-indigo-600" />
+             </div>
+             <div>
+                <DialogTitle className="text-2xl font-black tracking-tight">Crear Nuevo Item</DialogTitle>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Añadir producto o servicio</p>
+             </div>
+          </DialogHeader>
+          <div className="p-8 pb-32">
+            {storeId && (
+              <CreateItemForm 
+                storeId={storeId} 
+                onSuccess={() => {
+                  setIsDialogOpen(false);
+                  fetchItems();
+                }} 
+                onCancel={() => setIsDialogOpen(false)} 
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       </div>
     </div>
   );
