@@ -1,4 +1,4 @@
-import type { HasStoreResponse, CreateStorePayload, Store, UpdateStorePayload } from "@/domain/entities/store.entity";
+import type { HasStoreResponse, CreateStorePayload, Store, UpdateStorePayload, PaginatedStoresResponse, StoreFilters } from "@/domain/entities/store.entity";
 
 /**
  * Contrato del Repositorio de Tiendas.
@@ -26,4 +26,9 @@ export interface IStoreRepository {
    * @param payload Datos a actualizar
    */
   updateStore(id: string, payload: UpdateStorePayload): Promise<Store>;
+  
+  /**
+   * Obtiene una lista paginada de tiendas filtradas.
+   */
+  getStores(filters: StoreFilters): Promise<PaginatedStoresResponse>;
 }

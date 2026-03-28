@@ -64,6 +64,7 @@ export interface Store {
     lastName: string;
     email: string;
   };
+  slug: string;
   company?: {
     id: string;
     name: string;
@@ -71,4 +72,28 @@ export interface Store {
   };
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Filtros para la consulta de tiendas.
+ */
+export interface StoreFilters {
+  limit?: number;
+  offset?: number;
+  categoryId?: string;
+  city?: string;
+  state?: string;
+  q?: string;
+  sort?: string;
+  order?: "ASC" | "DESC";
+}
+
+/**
+ * Respuesta paginada de tiendas.
+ */
+export interface PaginatedStoresResponse {
+  data: Store[];
+  total: number;
+  limit: number;
+  offset: number;
 }

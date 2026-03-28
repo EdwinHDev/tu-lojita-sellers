@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { 
-  Store01Icon, 
-  SmartPhone01Icon, 
-  Location01Icon, 
+import {
+  Store01Icon,
+  SmartPhone01Icon,
+  Location01Icon,
   Tag01Icon,
   CheckmarkCircle01Icon,
   Loading03Icon,
@@ -25,6 +25,8 @@ import { UpdateStoreUseCase } from "@/application/use-cases/store/update-store.u
 import { Store } from "@/domain/entities/store.entity";
 import { Category } from "@/domain/entities/category.entity";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ImageCropper } from "@/components/ui/image-cropper";
+import { uploadImageAction, deleteImagesAction } from "@/app/actions/media.actions";
 
 const storeSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres"),
@@ -34,6 +36,7 @@ const storeSchema = z.object({
   city: z.string().min(2, "Ciudad requerida"),
   state: z.string().min(2, "Estado requerido"),
   categoryId: z.string().min(1, "Selecciona una categoría"),
+  logo: z.string().optional(),
 });
 
 type StoreFormData = z.infer<typeof storeSchema>;
@@ -53,6 +56,8 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(true);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   const {
     register,
@@ -71,11 +76,17 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
           getStoreUseCase.execute(storeId),
           globalCategoryRepository.findAll()
         ]);
-        
+
         const validatedCats = Array.isArray(cats) ? cats : [];
         setGlobalCategories(validatedCats);
         setStore(storeData);
         
+        // Configurar previsualización inicial del logo
+        if (storeData.logo) {
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL_IMAGES || "http://localhost:4200";
+          setLogoPreview(`${baseUrl}${storeData.logo}`);
+        }
+
         // Reset the form with store data
         reset({
           name: storeData.name,
@@ -85,6 +96,7 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
           city: storeData.city,
           state: storeData.state,
           categoryId: storeData.categoryId || storeData.category?.id || "",
+          logo: storeData.logo || "",
         });
       } catch (error) {
         console.error("Error loading store data:", error);
@@ -102,16 +114,61 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
   }, [globalCategories, store, setValue]);
 
   const onSubmit = async (data: StoreFormData) => {
+    let newImageId: string | null = null;
+    let oldImageId: string | null = null;
+    const oldLogoUrl = store?.logo;
+
     try {
       setIsSubmitting(true);
       setSuccessMessage(null);
-      await updateStoreUseCase.execute(storeId, data);
+
+      let finalData = { ...data };
+
+      // 1. Subir nuevo logo si se cambió
+      if (logoFile) {
+        const formData = new FormData();
+        formData.append("file", logoFile);
+        const uploadResult = await uploadImageAction(formData);
+
+        if (uploadResult.error) throw new Error(uploadResult.error);
+        
+        if (uploadResult.status === "success" && uploadResult.data?.url) {
+          finalData.logo = uploadResult.data.url;
+          newImageId = uploadResult.data.id;
+        }
+      }
+
+      // 2. Actualizar tienda en el backend
+      await updateStoreUseCase.execute(storeId, finalData);
+
+      // 3. ¡Éxito! Limpieza del logo anterior si fue reemplazado exitosamente
+      if (newImageId && oldLogoUrl) {
+        // Extraer ID del formato /img/{id}
+        oldImageId = oldLogoUrl.split("/").pop() || null;
+        if (oldImageId) {
+          await deleteImagesAction([oldImageId]);
+        }
+      }
+
       setSuccessMessage("Perfil actualizado correctamente");
-      reset(data);
+      
+      // Actualizar estado local
+      const updatedStore = { ...store, ...finalData } as Store;
+      setStore(updatedStore);
+      
+      reset(finalData);
+      setLogoFile(null); // Limpiar archivo pendiente
       setIsLocked(true);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error) {
       console.error("Error updating store:", error);
+      
+      // ROLLBACK: Si falla la actualización de la tienda, borrar la imagen RECIÉN subida
+      if (newImageId) {
+        await deleteImagesAction([newImageId]);
+      }
+      
+      alert(error instanceof Error ? error.message : "Error al actualizar la tienda");
     } finally {
       setIsSubmitting(false);
     }
@@ -141,14 +198,14 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
                 <CardDescription className="text-xs">Información básica y legal de tu establecimiento.</CardDescription>
               </div>
             </div>
-            
+
             <button
               type="button"
               onClick={() => setIsLocked(!isLocked)}
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all active:scale-95",
-                isLocked 
-                  ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:bg-indigo-100" 
+                isLocked
+                  ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:bg-indigo-100"
                   : "bg-amber-100 dark:bg-amber-900/20 text-amber-600 hover:bg-amber-200"
               )}
             >
@@ -161,6 +218,33 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
           </div>
         </CardHeader>
         <CardContent className="pt-6 space-y-6 sm:space-y-8">
+          {/* Logo Section */}
+          <div className={cn(
+            "flex flex-col sm:flex-row items-center gap-6 pb-8 border-b border-gray-100 dark:border-gray-800/50 transition-opacity",
+            isLocked && "opacity-70"
+          )}>
+            <div className="shrink-0">
+              <ImageCropper
+                onCropComplete={(file) => setLogoFile(file)}
+                initialPreviewUrl={logoPreview}
+                outputSize={{ width: 512, height: 512 }}
+                label="Logo del Negocio"
+                disabled={isLocked}
+              />
+            </div>
+            <div className="space-y-1 text-center sm:text-left">
+              <h4 className="font-bold text-gray-900 dark:text-white">Imagen de Marca</h4>
+              <p className="text-xs text-gray-500 max-w-[240px]">
+                Sube una imagen cuadrada de alta calidad. Se optimizará automáticamente para la plataforma.
+              </p>
+              {logoFile && !isLocked && (
+                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-tighter mt-2 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-md w-fit mx-auto sm:mx-0 animate-in fade-in zoom-in">
+                  Nueva imagen lista para guardar
+                </p>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Field>
               <FieldLabel className="text-xs font-bold text-gray-500 mb-1.5 flex items-center gap-2">
@@ -190,16 +274,16 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
                   "absolute left-3 top-3 transition-colors",
                   isLocked ? "text-gray-300" : "text-gray-400 group-focus-within:text-indigo-500"
                 )} />
-                <Input 
-                  {...register("name")} 
+                <Input
+                  {...register("name")}
                   disabled={isLocked}
                   className={cn(
                     "pl-10 h-11 rounded-xl border transition-all font-medium",
-                    isLocked 
-                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400" 
+                    isLocked
+                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
                       : "border-gray-200 dark:border-gray-800 focus:border-indigo-500"
-                  )} 
-                  placeholder="Ejem. Tienda Los Mangos" 
+                  )}
+                  placeholder="Ejem. Tienda Los Mangos"
                 />
               </div>
               <FieldError errors={[errors.name]} />
@@ -220,8 +304,8 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
               placeholder="Cuéntanos un poco sobre lo que vendes o el servicio que prestas..."
               className={cn(
                 "w-full rounded-2xl border px-4 py-3 text-sm font-medium transition-all resize-none",
-                isLocked 
-                  ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400" 
+                isLocked
+                  ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
                   : "bg-transparent border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
               )}
             />
@@ -295,15 +379,15 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
                   "absolute left-3 top-3 transition-colors",
                   isLocked ? "text-gray-300" : "text-gray-400 group-focus-within:text-indigo-500"
                 )} />
-                <Input 
-                  {...register("phone")} 
+                <Input
+                  {...register("phone")}
                   disabled={isLocked}
                   className={cn(
                     "pl-10 h-11 rounded-xl border transition-all font-medium",
-                    isLocked 
-                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400" 
+                    isLocked
+                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
                       : "border-gray-200 dark:border-gray-800 focus:border-indigo-500"
-                  )} 
+                  )}
                 />
               </div>
             </Field>
@@ -316,15 +400,15 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
                 )}>
                   Ciudad
                 </FieldLabel>
-                <Input 
-                  {...register("city")} 
+                <Input
+                  {...register("city")}
                   disabled={isLocked}
                   className={cn(
                     "h-11 rounded-xl border transition-all",
-                    isLocked 
-                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400" 
+                    isLocked
+                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
                       : "border-gray-200 dark:border-gray-800"
-                  )} 
+                  )}
                 />
               </Field>
               <Field>
@@ -334,15 +418,15 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
                 )}>
                   Estado
                 </FieldLabel>
-                <Input 
-                  {...register("state")} 
+                <Input
+                  {...register("state")}
                   disabled={isLocked}
                   className={cn(
                     "h-11 rounded-xl border transition-all",
-                    isLocked 
-                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400" 
+                    isLocked
+                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
                       : "border-gray-200 dark:border-gray-800"
-                  )} 
+                  )}
                 />
               </Field>
             </div>
@@ -355,15 +439,15 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
             )}>
               Dirección de la Sede
             </FieldLabel>
-            <Input 
-              {...register("address")} 
+            <Input
+              {...register("address")}
               disabled={isLocked}
               className={cn(
                 "h-11 rounded-xl border transition-all",
-                isLocked 
-                  ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400" 
+                isLocked
+                  ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
                   : "border-gray-200 dark:border-gray-800 focus:border-indigo-500"
-              )} 
+              )}
             />
           </Field>
         </CardContent>
@@ -376,7 +460,7 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
             <p className="text-xs sm:text-sm font-black text-green-600 flex items-center gap-2">
               <CheckmarkCircle01Icon size={18} /> {successMessage}
             </p>
-          ) : isDirty ? (
+          ) : isDirty || logoFile ? (
             <p className="text-xs sm:text-sm font-bold text-amber-500 truncate">Tienes cambios pendientes por guardar</p>
           ) : (
             <p className="text-xs sm:text-sm font-medium text-gray-400 truncate">No hay cambios realizados</p>
@@ -384,7 +468,7 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
         </div>
         <Button
           type="submit"
-          disabled={isSubmitting || !isDirty}
+          disabled={isSubmitting || (!isDirty && !logoFile)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 px-8 rounded-xl shadow-lg shadow-indigo-600/20 active:scale-95 transition-all text-sm shrink-0"
         >
           {isSubmitting ? <Loading03Icon className="animate-spin size-4" /> : "Guardar Cambios"}

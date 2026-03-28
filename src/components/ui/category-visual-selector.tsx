@@ -113,8 +113,12 @@ export function CategoryVisualSelector({ value, onChange, error }: CategoryVisua
 
                     {/* Image Container */}
                     <div 
-                      className="h-14 w-14 rounded-xl flex items-center justify-center mb-4 overflow-hidden border border-gray-100 dark:border-white/10 shadow-sm bg-gray-50 dark:bg-gray-800 bg-cover bg-center" 
-                      style={{ backgroundImage: category.image ? `url(${category.image})` : undefined }}
+                      className="h-14 w-14 rounded-xl flex items-center justify-center mb-4 overflow-hidden border border-gray-100 dark:border-white/10 shadow-sm bg-gray-50 dark:bg-gray-900 bg-cover bg-center shrink-0" 
+                      style={{ 
+                        backgroundImage: category.image 
+                          ? `url(${process.env.NEXT_PUBLIC_API_URL_IMAGES}${category.image})` 
+                          : undefined 
+                      }}
                     >
                       {!category.image && <Store01Icon size={24} className="text-gray-300 dark:text-gray-600" />}
                     </div>

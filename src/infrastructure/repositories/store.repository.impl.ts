@@ -1,5 +1,5 @@
 import type { IStoreRepository } from "@/domain/repositories/store.repository.interface";
-import type { HasStoreResponse, CreateStorePayload, Store, UpdateStorePayload } from "@/domain/entities/store.entity";
+import type { HasStoreResponse, CreateStorePayload, Store, UpdateStorePayload, PaginatedStoresResponse, StoreFilters } from "@/domain/entities/store.entity";
 import { axiosClient } from "@/infrastructure/http/axios.client";
 import axios from "axios";
 
@@ -56,5 +56,15 @@ export class StoreRepositoryImpl implements IStoreRepository {
       }
       throw error;
     }
+  }
+
+  /**
+   * GET /stores
+   */
+  async getStores(filters: StoreFilters): Promise<PaginatedStoresResponse> {
+    const response = await axiosClient.get<PaginatedStoresResponse>("/stores", {
+      params: filters,
+    });
+    return response.data;
   }
 }

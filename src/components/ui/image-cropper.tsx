@@ -12,6 +12,7 @@ import {
   Upload01Icon
 } from "hugeicons-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface ImageCropperProps {
   aspect?: number;
@@ -23,6 +24,7 @@ interface ImageCropperProps {
   label?: string;
   className?: string;
   hidePreviewAfterCrop?: boolean;
+  disabled?: boolean;
 }
 
 /**
@@ -96,6 +98,7 @@ export function ImageCropper({
   label = "Subir Imagen",
   className = "",
   hidePreviewAfterCrop = false,
+  disabled = false,
 }: ImageCropperProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
@@ -182,10 +185,16 @@ export function ImageCropper({
           onChange={onFileChange}
           className="hidden"
           id="image-input"
+          disabled={disabled}
         />
         <label
           htmlFor="image-input"
-          className="flex flex-col items-center justify-center w-full aspect-square rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:border-indigo-500/50 transition-all cursor-pointer overflow-hidden group"
+          className={cn(
+            "flex flex-col items-center justify-center w-full aspect-square rounded-2xl border-2 border-dashed transition-all overflow-hidden group",
+            disabled 
+              ? "border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 cursor-not-allowed opacity-50" 
+              : "border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:border-indigo-500/50 cursor-pointer"
+          )}
         >
           {previewUrl ? (
             <>
@@ -219,7 +228,7 @@ export function ImageCropper({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-100 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}

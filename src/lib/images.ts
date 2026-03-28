@@ -11,13 +11,13 @@ interface OptimizeOptions {
 
 /**
  * Transforms a raw image URL from our processor into an optimized version.
- * Works with the format: http://localhost:4200/img/{id}
+ * Works with the format: {NEXT_PUBLIC_API_URL_IMAGES}/img/{id}
  */
 export function getOptimizedImageUrl(url: string | undefined, options: OptimizeOptions = {}): string {
   if (!url) return "";
 
   // If the URL already contains query parameters, or isn't from our processor, return as is
-  // (Assuming our internal URLs start with /img/ or the localhost:4200/img/ prefix)
+  // (Assuming our internal URLs start with /img/ or the processor prefix)
   if (!url.includes("/img/")) return url;
 
   const { width, height, quality, format } = options;

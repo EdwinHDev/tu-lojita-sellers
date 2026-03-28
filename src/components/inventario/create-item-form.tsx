@@ -173,7 +173,7 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
       uploadedIds = uploadedData.map(img => img.id);
       
       // Backend expects absolute URLs for @IsUrl validation
-      const SERVER_URL = "http://localhost:4200";
+      const SERVER_URL = process.env.NEXT_PUBLIC_API_URL_IMAGES || "http://localhost:4200";
       const imageUrls = uploadedData.map(img => `${SERVER_URL}${img.url}`);
       const mainImage = uploadedData.find(img => img.isPrimary) 
         ? `${SERVER_URL}${uploadedData.find(img => img.isPrimary)?.url}` 

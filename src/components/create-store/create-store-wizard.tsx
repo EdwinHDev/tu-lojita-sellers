@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ImageCropper } from "@/components/ui/image-cropper";
 import { CategoryVisualSelector } from "@/components/ui/category-visual-selector";
-import { uploadImageAction, deleteImageAction } from "@/app/actions/media.actions";
+import { uploadImageAction, deleteImagesAction } from "@/app/actions/media.actions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -437,7 +437,7 @@ export function CreateStoreWizard() {
       } catch (storeError) {
         // Rollback: Eliminar la imagen si falla la creación de la tienda
         if (uploadedImageId) {
-          await deleteImageAction(uploadedImageId);
+          await deleteImagesAction([uploadedImageId]);
         }
         throw storeError;
       }

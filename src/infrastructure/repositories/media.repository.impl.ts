@@ -3,7 +3,7 @@
  * Strict implementation as per user requirements.
  */
 export class MediaRepositoryImpl {
-  private readonly baseUrl = "http://localhost:4200";
+  private readonly baseUrl = process.env.NEXT_PUBLIC_API_URL_IMAGES || "http://localhost:4200";
   private readonly apiKey: string;
 
   constructor(apiKey: string) {
