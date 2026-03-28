@@ -43,7 +43,7 @@ const INITIAL_STATE: WizardState = {
   city: "",
   state: "",
   logo: "",
-  categoryId: "",
+  subCategoryId: "",
 };
 
 // ─── Step Config ──────────────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ function validateStep(step: StepId, data: WizardState): Record<string, string> {
   if (step === 3) {
     if (data.logo && !/^https?:\/\/.+/.test(data.logo))
       errors.logo = "Ingresa una URL válida (https://...).";
-    if (!data.categoryId.trim()) errors.categoryId = "La categoría es requerida.";
+    if (!data.subCategoryId.trim()) errors.subCategoryId = "La categoría base es requerida.";
   }
 
   return errors;
@@ -315,12 +315,12 @@ function Step3Form({
       {/* Category Section */}
       <div className="space-y-3">
         <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 px-1">
-          Categoría Principal
+          Categoría y Especialidad
         </label>
         <CategoryVisualSelector
-          value={data.categoryId}
-          onChange={(id) => onChange("categoryId", id)}
-          error={errors.categoryId}
+          value={data.subCategoryId}
+          onChange={(id) => onChange("subCategoryId", id)}
+          error={errors.subCategoryId}
         />
         <p className="text-[11px] text-gray-500 dark:text-gray-500 font-medium px-1 flex items-start gap-1.5">
           <InformationCircleIcon size={14} className="mt-0.5 shrink-0" />

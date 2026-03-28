@@ -36,7 +36,7 @@ const storeSchema = z.object({
   address: z.string().min(5, "Dirección inválida"),
   city: z.string().min(2, "Ciudad requerida"),
   state: z.string().min(2, "Estado requerido"),
-  categoryId: z.string().min(1, "Selecciona una categoría"),
+  subCategoryId: z.string().min(1, "Selecciona una especialidad"),
   logo: z.string().optional(),
 });
 
@@ -54,6 +54,7 @@ const updateStoreUseCase = new UpdateStoreUseCase(storeRepository);
 export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
   const [store, setStore] = useState<Store | null>(null);
   const [globalCategories, setGlobalCategories] = useState<Category[]>([]);
+  const [selectedBaseCategoryId, setSelectedBaseCategoryId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(true);
@@ -95,23 +96,19 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
           address: storeData.address,
           city: storeData.city,
           state: storeData.state,
-          categoryId: storeData.categoryId || storeData.category?.id || "",
+          subCategoryId: storeData.subcategory?.id || "",
           logo: storeData.logo || "",
         });
+        
+        if (storeData.subcategory?.category?.id) {
+          setSelectedBaseCategoryId(storeData.subcategory.category.id);
+        }
       } catch (error) {
         console.error("Error loading store data:", error);
       }
     };
     loadData();
   }, [storeId, reset]);
-
-  // Sync categoryId specifically when globalCategories are loaded
-  useEffect(() => {
-    const currentCatId = store?.categoryId || store?.category?.id;
-    if (globalCategories.length > 0 && currentCatId) {
-      setValue("categoryId", currentCatId);
-    }
-  }, [globalCategories, store, setValue]);
 
   const onSubmit = async (data: StoreFormData) => {
     let newImageId: string | null = null;
@@ -313,43 +310,85 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
             <FieldError errors={[errors.description]} />
           </Field>
 
-          <Field>
-            <div className="flex items-center justify-between mb-1.5">
-              <FieldLabel className={cn(
-                "text-xs font-bold mb-0 transition-colors",
-                isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-              )}>
-                Categoría de Negocio
-              </FieldLabel>
-              {!isLocked && (
-                <span className="text-[10px] font-black text-amber-500 flex items-center gap-1 uppercase tracking-tighter">
-                  <Edit01Icon size={10} /> Editable
-                </span>
-              )}
-            </div>
-            <div className="relative">
-              <select
-                {...register("categoryId")}
-                disabled={isLocked}
-                className={cn(
-                  "w-full h-11 rounded-xl border px-4 text-sm font-medium outline-none transition-all appearance-none",
-                  isLocked
-                    ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400 cursor-not-allowed"
-                    : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Field>
+              <div className="flex items-center justify-between mb-1.5">
+                <FieldLabel className={cn(
+                  "text-xs font-bold mb-0 transition-colors",
+                  isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
+                )}>
+                  Categoría Base
+                </FieldLabel>
+                {!isLocked && (
+                  <span className="text-[10px] font-black text-amber-500 flex items-center gap-1 uppercase tracking-tighter">
+                    <Edit01Icon size={10} /> Editable
+                  </span>
                 )}
-              >
-                <option value="">Selecciona la categoría principal...</option>
-                {globalCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-              {isLocked && (
-                <div className="absolute right-3 top-3.5 text-gray-300 pointer-events-none">
-                  <LockPasswordIcon size={14} />
-                </div>
-              )}
-            </div>
-          </Field>
+              </div>
+              <div className="relative">
+                <select
+                  value={selectedBaseCategoryId}
+                  onChange={(e) => {
+                    setSelectedBaseCategoryId(e.target.value);
+                    setValue("subCategoryId", "", { shouldDirty: true });
+                  }}
+                  disabled={isLocked}
+                  className={cn(
+                    "w-full h-11 rounded-xl border px-4 text-sm font-medium outline-none transition-all appearance-none",
+                    isLocked
+                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400 cursor-not-allowed"
+                      : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  )}
+                >
+                  <option value="">Selecciona la categoría base...</option>
+                  {globalCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+                {isLocked && (
+                  <div className="absolute right-3 top-3.5 text-gray-300 pointer-events-none">
+                    <LockPasswordIcon size={14} />
+                  </div>
+                )}
+              </div>
+            </Field>
+
+            <Field>
+              <div className="flex items-center justify-between mb-1.5">
+                <FieldLabel className={cn(
+                  "text-xs font-bold mb-0 transition-colors",
+                  isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
+                )}>
+                  Especialidad
+                </FieldLabel>
+              </div>
+              <div className="relative">
+                <select
+                  {...register("subCategoryId")}
+                  disabled={isLocked || !selectedBaseCategoryId}
+                  className={cn(
+                    "w-full h-11 rounded-xl border px-4 text-sm font-medium outline-none transition-all appearance-none",
+                    isLocked || !selectedBaseCategoryId
+                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400 cursor-not-allowed"
+                      : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  )}
+                >
+                  <option value="">Selecciona la especialidad...</option>
+                  {globalCategories
+                    .find(c => c.id === selectedBaseCategoryId)
+                    ?.subcategories?.map((sub) => (
+                      <option key={sub.id} value={sub.id}>{sub.name}</option>
+                  ))}
+                </select>
+                {isLocked && (
+                  <div className="absolute right-3 top-3.5 text-gray-300 pointer-events-none">
+                    <LockPasswordIcon size={14} />
+                  </div>
+                )}
+              </div>
+              <FieldError errors={[errors.subCategoryId]} />
+            </Field>
+          </div>
         </CardContent>
       </Card>
 

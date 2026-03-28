@@ -19,8 +19,8 @@ export class CreateStoreUseCase {
     if (!payload.rif || !/^[A-Z]-\d{8}-\d$/.test(payload.rif)) {
       throw new Error("El RIF debe tener el formato correcto (ej. J-12345678-0).");
     }
-    if (!payload.categoryId) {
-      throw new Error("Debes seleccionar una categoría para tu tienda.");
+    if (!payload.subCategoryId) {
+      throw new Error("Debes seleccionar una especialidad para tu tienda.");
     }
 
     return this.storeRepository.createStore(payload);

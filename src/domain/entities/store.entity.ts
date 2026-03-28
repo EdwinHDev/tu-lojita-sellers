@@ -20,7 +20,7 @@ export interface CreateStorePayload {
   city: string;
   state: string;
   logo: string;
-  categoryId: string;
+  subCategoryId: string;
 }
 
 /**
@@ -35,7 +35,7 @@ export interface UpdateStorePayload {
   city?: string;
   state?: string;
   logo?: string;
-  categoryId?: string;
+  subCategoryId?: string;
 }
 
 /**
@@ -52,10 +52,13 @@ export interface Store {
   city: string;
   state: string;
   logo: string;
-  categoryId: string; // Puede venir plano o dentro del objeto category
-  category?: {
+  subcategory?: {
     id: string;
     name: string;
+    category?: {
+      id: string;
+      name: string;
+    }
   };
   ownerId: string;
   owner?: {
