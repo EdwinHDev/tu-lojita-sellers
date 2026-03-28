@@ -32,16 +32,26 @@ import { uploadImageAction, deleteImagesAction } from "@/app/actions/media.actio
 
 type StepId = 1 | 2 | 3;
 
-interface WizardState extends CreateStorePayload { }
+interface WizardState extends Omit<CreateStorePayload, "mainAddress"> {
+  hasPhysicalStore: boolean;
+  address: string;
+  city: string;
+  state: string;
+  latitude: number;
+  longitude: number;
+}
 
 const INITIAL_STATE: WizardState = {
   name: "",
   description: "",
   rif: "",
   phone: "",
+  hasPhysicalStore: false,
   address: "",
   city: "",
   state: "",
+  latitude: 0,
+  longitude: 0,
   logo: "",
   subCategoryId: "",
 };
@@ -104,10 +114,11 @@ function validateStep(step: StepId, data: WizardState): Record<string, string> {
       errors.phone = "Número inválido. Incluye el código de país (ej. +58...)";
   }
 
-  if (step === 2) {
+  if (step === 2 && data.hasPhysicalStore) {
     if (!data.address.trim()) errors.address = "La dirección es requerida.";
     if (!data.city.trim()) errors.city = "La ciudad es requerida.";
     if (!data.state.trim()) errors.state = "El estado es requerido.";
+    if (!data.latitude || !data.longitude) errors.map = "Selecciona una ubicación válida en el mapa.";
   }
 
   if (step === 3) {
@@ -239,6 +250,8 @@ function Step1Form({
   );
 }
 
+import { MapPicker } from "@/components/ui/map-picker/map-picker";
+
 function Step2Form({
   data,
   errors,
@@ -246,36 +259,85 @@ function Step2Form({
 }: {
   data: WizardState;
   errors: Record<string, string>;
-  onChange: (field: keyof WizardState, value: string) => void;
+  onChange: (field: keyof WizardState, value: string | number | boolean) => void;
 }) {
   return (
-    <div className="space-y-5">
-      <Field
-        label="Dirección"
-        type="text"
-        placeholder="Calle Principal #123"
-        value={data.address}
-        onChange={(e) => onChange("address", e.target.value)}
-        error={errors.address}
-      />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <Field
-          label="Ciudad"
-          type="text"
-          placeholder="Caracas"
-          value={data.city}
-          onChange={(e) => onChange("city", e.target.value)}
-          error={errors.city}
-        />
-        <Field
-          label="Estado"
-          type="text"
-          placeholder="Miranda"
-          value={data.state}
-          onChange={(e) => onChange("state", e.target.value)}
-          error={errors.state}
-        />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between p-5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Ubicación Física</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Activa esta opción si tus clientes pueden visitarte o si necesitas cálculos de distancia.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onChange("hasPhysicalStore", !data.hasPhysicalStore)}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+            data.hasPhysicalStore ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-700"
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              data.hasPhysicalStore ? "translate-x-6" : "translate-x-1"
+            }`}
+          />
+        </button>
       </div>
+
+      <AnimatePresence>
+        {data.hasPhysicalStore && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="space-y-5 overflow-hidden"
+          >
+            <Field
+              label="Dirección"
+              type="text"
+              placeholder="Calle Principal #123"
+              value={data.address}
+              onChange={(e) => onChange("address", e.target.value)}
+              error={errors.address}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <Field
+                label="Ciudad"
+                type="text"
+                placeholder="Caracas"
+                value={data.city}
+                onChange={(e) => onChange("city", e.target.value)}
+                error={errors.city}
+              />
+              <Field
+                label="Estado"
+                type="text"
+                placeholder="Miranda"
+                value={data.state}
+                onChange={(e) => onChange("state", e.target.value)}
+                error={errors.state}
+              />
+            </div>
+
+            <div className="space-y-2 mt-4">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Ubica tu negocio en el mapa
+              </label>
+              <MapPicker
+                initialPosition={data.latitude && data.longitude ? [data.latitude, data.longitude] : undefined}
+                onPositionChange={(lat, lng) => {
+                  onChange("latitude", lat);
+                  onChange("longitude", lng);
+                }}
+              />
+              <FieldError message={errors.map} />
+              <p className="text-[11px] text-gray-500 font-medium flex items-start gap-1.5 mt-1">
+                <InformationCircleIcon size={14} className="shrink-0" />
+                Haz clic o arrastra el pin para establecer la ubicación exacta.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -369,7 +431,7 @@ export function CreateStoreWizard() {
     router.push("/");
   };
 
-  const handleChange = (field: keyof WizardState, value: string) => {
+  const handleChange = (field: keyof WizardState, value: string | number | boolean) => {
     setData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors((prev) => {
@@ -432,7 +494,26 @@ export function CreateStoreWizard() {
 
       // 2. Crear la tienda (con rollback si falla)
       try {
-        await createStoreUseCase.execute(finalData);
+        const payload: CreateStorePayload = {
+          name: finalData.name,
+          description: finalData.description,
+          rif: finalData.rif,
+          phone: finalData.phone,
+          logo: finalData.logo,
+          subCategoryId: finalData.subCategoryId,
+        };
+
+        if (finalData.hasPhysicalStore) {
+          payload.mainAddress = {
+            address: finalData.address,
+            city: finalData.city,
+            state: finalData.state,
+            latitude: finalData.latitude,
+            longitude: finalData.longitude,
+          };
+        }
+
+        await createStoreUseCase.execute(payload);
         router.push("/tienda");
       } catch (storeError) {
         // Rollback: Eliminar la imagen si falla la creación de la tienda

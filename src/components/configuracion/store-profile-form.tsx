@@ -13,6 +13,8 @@ import {
   Edit01Icon,
   LockPasswordIcon
 } from "hugeicons-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { MapPicker } from "@/components/ui/map-picker/map-picker";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -33,9 +35,12 @@ const storeSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres"),
   description: z.string().min(10, "La descripción debe tener al menos 10 caracteres"),
   phone: z.string().min(8, "Teléfono inválido"),
-  address: z.string().min(5, "Dirección inválida"),
-  city: z.string().min(2, "Ciudad requerida"),
-  state: z.string().min(2, "Estado requerido"),
+  hasPhysicalStore: z.boolean(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
   subCategoryId: z.string().min(1, "Selecciona una especialidad"),
   logo: z.string().optional(),
 });
@@ -66,6 +71,8 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
     handleSubmit,
     reset,
     setValue,
+    watch,
+    getValues,
     formState: { errors, isDirty },
   } = useForm<StoreFormData>({
     resolver: zodResolver(storeSchema),
@@ -89,13 +96,18 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
         }
 
         // Reset the form with store data
+        const mainAddr = storeData.addresses?.find((a: any) => a.isMain) || storeData.addresses?.[0];
+        
         reset({
           name: storeData.name,
           description: storeData.description,
           phone: storeData.phone,
-          address: storeData.address,
-          city: storeData.city,
-          state: storeData.state,
+          hasPhysicalStore: !!mainAddr,
+          address: mainAddr?.address || "",
+          city: mainAddr?.city || "",
+          state: mainAddr?.state || "",
+          latitude: mainAddr?.latitude || 0,
+          longitude: mainAddr?.longitude || 0,
           subCategoryId: storeData.subcategory?.id || "",
           logo: storeData.logo || "",
         });
@@ -119,9 +131,8 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
       setIsSubmitting(true);
       setSuccessMessage(null);
 
-      let finalData = { ...data };
-
       // 1. Subir nuevo logo si se cambió
+      let logoUrl = data.logo;
       if (logoFile) {
         const formData = new FormData();
         formData.append("file", logoFile);
@@ -130,18 +141,35 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
         if (uploadResult.error) throw new Error(uploadResult.error);
         
         if (uploadResult.status === "success" && uploadResult.data?.url) {
-          // Guardar SOLO la ruta relativa devuelta por el servidor
-          finalData.logo = uploadResult.data.url;
+          logoUrl = uploadResult.data.url;
           newImageId = uploadResult.data.id;
         }
       }
 
-      // 2. Actualizar tienda en el backend
-      await updateStoreUseCase.execute(storeId, finalData);
+      // 2. Preparar payload de actualización
+      const updatePayload: any = {
+        name: data.name,
+        description: data.description,
+        phone: data.phone,
+        subCategoryId: data.subCategoryId,
+        logo: logoUrl,
+      };
 
-      // 3. ¡Éxito! Limpieza del logo anterior si fue reemplazado exitosamente
+      if (data.hasPhysicalStore) {
+        updatePayload.mainAddress = {
+          address: data.address,
+          city: data.city,
+          state: data.state,
+          latitude: data.latitude,
+          longitude: data.longitude,
+        };
+      }
+
+      // 3. Actualizar tienda en el backend
+      await updateStoreUseCase.execute(storeId, updatePayload);
+
+      // 4. ¡Éxito! Limpieza del logo anterior si fue reemplazado exitosamente
       if (newImageId && oldLogoUrl) {
-        // Extraer ID del formato /img/{id}
         oldImageId = oldLogoUrl.split("/").pop() || null;
         if (oldImageId) {
           await deleteImagesAction([oldImageId]);
@@ -151,21 +179,25 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
       setSuccessMessage("Perfil actualizado correctamente");
       
       // Actualizar estado local
-      const updatedStore = { ...store, ...finalData } as Store;
-      setStore(updatedStore);
+      const updatedStore = { 
+        ...store, 
+        ...data,
+        logo: logoUrl,
+        subcategory: globalCategories
+          .find(c => c.id === selectedBaseCategoryId)
+          ?.subcategories?.find(s => s.id === data.subCategoryId)
+      } as unknown as Store;
       
-      reset(finalData);
-      setLogoFile(null); // Limpiar archivo pendiente
+      setStore(updatedStore);
+      reset(data);
+      setLogoFile(null);
       setIsLocked(true);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error) {
       console.error("Error updating store:", error);
-      
-      // ROLLBACK: Si falla la actualización de la tienda, borrar la imagen RECIÉN subida
       if (newImageId) {
         await deleteImagesAction([newImageId]);
       }
-      
       alert(error instanceof Error ? error.message : "Error al actualizar la tienda");
     } finally {
       setIsSubmitting(false);
@@ -180,6 +212,8 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
       </div>
     );
   }
+
+  const hasPhysicalStore = watch("hasPhysicalStore");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 sm:space-y-8 pb-32">
@@ -406,90 +440,143 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
           </div>
         </CardHeader>
         <CardContent className="pt-6 space-y-6 sm:space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Field>
-              <FieldLabel className={cn(
-                "text-xs font-bold mb-1.5 transition-colors",
-                isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-              )}>
-                Teléfono de Atención
-              </FieldLabel>
-              <div className="relative group">
-                <SmartPhone01Icon size={16} className={cn(
-                  "absolute left-3 top-3 transition-colors",
-                  isLocked ? "text-gray-300" : "text-gray-400 group-focus-within:text-indigo-500"
-                )} />
-                <Input
-                  {...register("phone")}
-                  disabled={isLocked}
-                  className={cn(
-                    "pl-10 h-11 rounded-xl border transition-all font-medium",
-                    isLocked
-                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
-                      : "border-gray-200 dark:border-gray-800 focus:border-indigo-500"
-                  )}
-                />
-              </div>
-            </Field>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Field>
-                <FieldLabel className={cn(
-                  "text-xs font-bold mb-1.5 transition-colors",
-                  isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-                )}>
-                  Ciudad
-                </FieldLabel>
-                <Input
-                  {...register("city")}
-                  disabled={isLocked}
-                  className={cn(
-                    "h-11 rounded-xl border transition-all",
-                    isLocked
-                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
-                      : "border-gray-200 dark:border-gray-800"
-                  )}
-                />
-              </Field>
-              <Field>
-                <FieldLabel className={cn(
-                  "text-xs font-bold mb-1.5 transition-colors",
-                  isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-                )}>
-                  Estado
-                </FieldLabel>
-                <Input
-                  {...register("state")}
-                  disabled={isLocked}
-                  className={cn(
-                    "h-11 rounded-xl border transition-all",
-                    isLocked
-                      ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
-                      : "border-gray-200 dark:border-gray-800"
-                  )}
-                />
-              </Field>
+          <div className="flex items-center justify-between p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 mb-6">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Sede Física</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Activa si posees un local para cálculo de distancias.</p>
             </div>
+            <button
+              type="button"
+              disabled={isLocked}
+              onClick={() => setValue("hasPhysicalStore", !hasPhysicalStore, { shouldDirty: true })}
+              className={cn(
+                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
+                hasPhysicalStore ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-700",
+                isLocked && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <span className={cn(
+                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                hasPhysicalStore ? "translate-x-6" : "translate-x-1"
+              )} />
+            </button>
           </div>
 
-          <Field>
-            <FieldLabel className={cn(
-              "text-xs font-bold mb-1.5 transition-colors",
-              isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-            )}>
-              Dirección de la Sede
-            </FieldLabel>
-            <Input
-              {...register("address")}
-              disabled={isLocked}
-              className={cn(
-                "h-11 rounded-xl border transition-all",
-                isLocked
-                  ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
-                  : "border-gray-200 dark:border-gray-800 focus:border-indigo-500"
-              )}
-            />
-          </Field>
+          <AnimatePresence>
+            {hasPhysicalStore && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-6 sm:space-y-8 overflow-hidden"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Field>
+                    <FieldLabel className={cn(
+                      "text-xs font-bold mb-1.5 transition-colors",
+                      isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
+                    )}>
+                      Teléfono de Atención
+                    </FieldLabel>
+                    <div className="relative group">
+                      <SmartPhone01Icon size={16} className={cn(
+                        "absolute left-3 top-3 transition-colors",
+                        isLocked ? "text-gray-300" : "text-gray-400 group-focus-within:text-indigo-500"
+                      )} />
+                      <Input
+                        {...register("phone")}
+                        disabled={isLocked}
+                        className={cn(
+                          "pl-10 h-11 rounded-xl border transition-all font-medium",
+                          isLocked
+                            ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
+                            : "border-gray-200 dark:border-gray-800 focus:border-indigo-500"
+                        )}
+                      />
+                    </div>
+                  </Field>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field>
+                      <FieldLabel className={cn(
+                        "text-xs font-bold mb-1.5 transition-colors",
+                        isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
+                      )}>
+                        Ciudad
+                      </FieldLabel>
+                      <Input
+                        {...register("city")}
+                        disabled={isLocked}
+                        className={cn(
+                          "h-11 rounded-xl border transition-all",
+                          isLocked
+                            ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
+                            : "border-gray-200 dark:border-gray-800"
+                        )}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel className={cn(
+                        "text-xs font-bold mb-1.5 transition-colors",
+                        isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
+                      )}>
+                        Estado
+                      </FieldLabel>
+                      <Input
+                        {...register("state")}
+                        disabled={isLocked}
+                        className={cn(
+                          "h-11 rounded-xl border transition-all",
+                          isLocked
+                            ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
+                            : "border-gray-200 dark:border-gray-800"
+                        )}
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                <Field>
+                  <FieldLabel className={cn(
+                    "text-xs font-bold mb-1.5 transition-colors",
+                    isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
+                  )}>
+                    Dirección de la Sede
+                  </FieldLabel>
+                  <Input
+                    {...register("address")}
+                    disabled={isLocked}
+                    className={cn(
+                      "h-11 rounded-xl border transition-all",
+                      isLocked
+                        ? "bg-gray-50/50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-800 text-gray-400"
+                        : "border-gray-200 dark:border-gray-800 focus:border-indigo-500"
+                    )}
+                  />
+                </Field>
+
+                <div className="space-y-4">
+                  <FieldLabel className={cn(
+                    "text-xs font-bold mb-0 transition-colors",
+                    isLocked ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
+                  )}>
+                    Ubicación en el Mapa
+                  </FieldLabel>
+                  <MapPicker
+                    disabled={isLocked}
+                    initialPosition={watch("latitude") && watch("longitude") ? [watch("latitude")!, watch("longitude")!] : undefined}
+                    onPositionChange={(lat, lng) => {
+                      setValue("latitude", lat, { shouldDirty: true });
+                      setValue("longitude", lng, { shouldDirty: true });
+                    }}
+                  />
+                  <p className="text-[10px] text-gray-500 font-medium">
+                    Arrestra el marcador hasta el punto exacto de tu negocio.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </CardContent>
       </Card>
 

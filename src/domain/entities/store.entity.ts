@@ -7,6 +7,14 @@ export interface HasStoreResponse {
   storeName: string | null;
 }
 
+export interface CreateStoreAddressPayload {
+  address: string;
+  city: string;
+  state: string;
+  latitude: number;
+  longitude: number;
+}
+
 /**
  * Payload necesario para crear una nueva tienda en el backend.
  * Todos los campos son requeridos salvo logo (URL opcional).
@@ -16,9 +24,7 @@ export interface CreateStorePayload {
   description: string;
   rif: string;
   phone: string;
-  address: string;
-  city: string;
-  state: string;
+  mainAddress?: CreateStoreAddressPayload;
   logo: string;
   subCategoryId: string;
 }
@@ -31,11 +37,19 @@ export interface UpdateStorePayload {
   name?: string;
   description?: string;
   phone?: string;
-  address?: string;
-  city?: string;
-  state?: string;
+  mainAddress?: CreateStoreAddressPayload;
   logo?: string;
   subCategoryId?: string;
+}
+
+export interface StoreAddress {
+  id: string;
+  address: string;
+  city: string;
+  state: string;
+  latitude: number;
+  longitude: number;
+  isMain?: boolean;
 }
 
 /**
@@ -48,9 +62,7 @@ export interface Store {
   description: string;
   rif: string;
   phone: string;
-  address: string;
-  city: string;
-  state: string;
+  addresses?: StoreAddress[];
   logo: string;
   subcategory?: {
     id: string;
