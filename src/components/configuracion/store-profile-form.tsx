@@ -27,6 +27,7 @@ import { Category } from "@/domain/entities/category.entity";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ImageCropper } from "@/components/ui/image-cropper";
 import { uploadImageAction, deleteImagesAction } from "@/app/actions/media.actions";
+import { getOptimizedImageUrl, IMAGE_PRESETS } from "@/lib/images";
 
 const storeSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres"),
@@ -81,10 +82,9 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
         setGlobalCategories(validatedCats);
         setStore(storeData);
         
-        // Configurar previsualización inicial del logo
+        // Configurar previsualización inicial del logo utilizando la utilidad global
         if (storeData.logo) {
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL_IMAGES || "http://localhost:4200";
-          setLogoPreview(`${baseUrl}${storeData.logo}`);
+          setLogoPreview(getOptimizedImageUrl(storeData.logo, IMAGE_PRESETS.LOGO));
         }
 
         // Reset the form with store data
@@ -133,6 +133,7 @@ export function StoreProfileForm({ storeId }: StoreProfileFormProps) {
         if (uploadResult.error) throw new Error(uploadResult.error);
         
         if (uploadResult.status === "success" && uploadResult.data?.url) {
+          // Guardar SOLO la ruta relativa devuelta por el servidor
           finalData.logo = uploadResult.data.url;
           newImageId = uploadResult.data.id;
         }

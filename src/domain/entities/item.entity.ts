@@ -70,6 +70,8 @@ export interface Item {
   trackInventory: boolean;
   stockQuantity?: number;
   requiresBooking: boolean;
+  isFeatured: boolean;
+  discountPrice?: number;
   attributes: ItemAttributes;
   storeId: string;
   store?: Store;
@@ -94,5 +96,35 @@ export interface CreateItemPayload {
   trackInventory?: boolean;
   stockQuantity?: number;
   requiresBooking?: boolean;
+  isFeatured?: boolean;
+  discountPrice?: number;
   attributes?: ItemAttributes;
+}
+
+/**
+ * Filtros para la consulta de items.
+ */
+export interface ItemFilters {
+  limit?: number;
+  offset?: number;
+  sort?: string;
+  order?: "ASC" | "DESC";
+  minPrice?: number;
+  maxPrice?: number;
+  storeId?: string;
+  storeCategoryId?: string;
+  isFeatured?: boolean;
+  hasDiscount?: boolean;
+  onlyInStock?: boolean;
+  q?: string;
+}
+
+/**
+ * Respuesta paginada de items.
+ */
+export interface PaginatedItemsResponse {
+  data: Item[];
+  total: number;
+  limit: number;
+  offset: number;
 }

@@ -2,6 +2,8 @@
 
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
+import { useRender } from "@base-ui/react/use-render"
+import { mergeProps } from "@base-ui/react/merge-props"
 
 import { cn } from "@/lib/utils"
 import { ChevronRightIcon, CheckIcon } from "lucide-react"
@@ -14,8 +16,22 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
   return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
 }
 
-function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
-  return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
+function DropdownMenuTrigger({
+  className,
+  render,
+  ...props
+}: useRender.ComponentProps<"button"> & MenuPrimitive.Trigger.Props) {
+  return useRender({
+    defaultTagName: "button",
+    props: mergeProps(
+      {
+        className: cn("outline-none", className),
+        "data-slot": "dropdown-menu-trigger",
+      },
+      props
+    ),
+    render,
+  })
 }
 
 function DropdownMenuContent({

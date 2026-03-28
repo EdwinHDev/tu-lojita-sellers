@@ -1,4 +1,4 @@
-import { Item, CreateItemPayload } from "../entities/item.entity";
+import { Item, CreateItemPayload, ItemFilters, PaginatedItemsResponse } from "../entities/item.entity";
 
 /**
  * Interface para el Repositorio de Items.
@@ -10,9 +10,14 @@ export interface IItemRepository {
   create(payload: CreateItemPayload): Promise<Item>;
 
   /**
-   * Obtiene todos los items de una tienda específica.
+   * Obtiene todos los items de una tienda específica (mantenido por compatibilidad).
    */
   findByStoreId(storeId: string): Promise<Item[]>;
+
+  /**
+   * Obtiene todos los items con soporte para filtros y paginación.
+   */
+  findAll(filters: ItemFilters): Promise<PaginatedItemsResponse>;
 
   /**
    * Obtiene un item por su ID.

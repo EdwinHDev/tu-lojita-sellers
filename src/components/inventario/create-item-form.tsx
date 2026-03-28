@@ -16,7 +16,8 @@ import {
   Loading03Icon,
   Delete02Icon,
   DeliveryTruck01Icon,
-  Calendar01Icon
+  Calendar01Icon,
+  StarIcon
 } from "hugeicons-react";
 
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,6 @@ import { CreateCategorySheet } from "./create-category-sheet";
 import { ImageCropper } from "@/components/ui/image-cropper";
 import { uploadImagesAction, deleteImagesAction } from "@/app/actions/media.actions";
 import { getOptimizedImageUrl, IMAGE_PRESETS } from "@/lib/images";
-import { StarIcon } from "hugeicons-react";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -51,6 +51,8 @@ const itemSchema = z.object({
   trackInventory: z.boolean(),
   stockQuantity: z.preprocess((val) => (val === "" || val === null || (typeof val === "number" && isNaN(val)) ? undefined : Number(val)), z.number().min(0).optional()) as any,
   requiresBooking: z.boolean(),
+  isFeatured: z.boolean(),
+  discountPrice: z.preprocess((val) => (val === "" || val === null || (typeof val === "number" && isNaN(val)) ? undefined : Number(val)), z.number().min(0).optional()) as any,
 });
 
 export type ItemFormValues = {
@@ -62,6 +64,8 @@ export type ItemFormValues = {
   trackInventory: boolean;
   stockQuantity?: number;
   requiresBooking: boolean;
+  isFeatured: boolean;
+  discountPrice?: number;
 };
 
 // ─── Components ───────────────────────────────────────────────────────────────
@@ -98,6 +102,7 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
       itemType: ItemType.PRODUCT,
       trackInventory: true,
       requiresBooking: false,
+      isFeatured: false,
     },
   });
 
@@ -105,6 +110,7 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
   const isTrackingInventory = watch("trackInventory");
   const titleValue = watch("title") || "";
   const descriptionValue = watch("description") || "";
+  const isFeatured = watch("isFeatured");
 
   // Load categories
   const loadCategories = async () => {
@@ -172,12 +178,9 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
       const uploadedData = uploadResult.data as { id: string; url: string; isPrimary: boolean }[];
       uploadedIds = uploadedData.map(img => img.id);
       
-      // Backend expects absolute URLs for @IsUrl validation
-      const SERVER_URL = process.env.NEXT_PUBLIC_API_URL_IMAGES || "http://localhost:4200";
-      const imageUrls = uploadedData.map(img => `${SERVER_URL}${img.url}`);
-      const mainImage = uploadedData.find(img => img.isPrimary) 
-        ? `${SERVER_URL}${uploadedData.find(img => img.isPrimary)?.url}` 
-        : imageUrls[0];
+      // Store ONLY relative paths in DB as per user request
+      const imageUrls = uploadedData.map(img => img.url);
+      const mainImage = uploadedData.find(img => img.isPrimary)?.url || imageUrls[0];
 
       // Clean categoryId if it's empty string
       const finalValues = {
@@ -392,6 +395,57 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
                 />
               </Field>
             )}
+          </div>
+        </section>
+
+        <Separator className="bg-gray-100 dark:bg-gray-800" />
+
+        {/* Section: Marketing & Promotion */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+              <StarIcon size={18} className="text-amber-600" />
+            </div>
+            <h2 className="text-lg font-bold">Marketing y Promoción</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Field>
+              <FieldLabel>Precio de Oferta ($)</FieldLabel>
+              <Input 
+                type="number" 
+                step="0.01" 
+                {...register("discountPrice", { valueAsNumber: true })} 
+                placeholder="0.00"
+                className="rounded-xl border-gray-200 dark:border-gray-800"
+              />
+              <p className="text-[10px] text-gray-400 mt-1 font-medium">Dejar vacío si no hay oferta activa.</p>
+              <FieldError errors={[errors.discountPrice]} />
+            </Field>
+
+            <div 
+              onClick={() => setValue("isFeatured", !isFeatured)}
+              className={cn(
+                "flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer",
+                isFeatured
+                  ? "border-amber-500 bg-amber-50/50 dark:bg-amber-950/20"
+                  : "border-gray-100 dark:border-gray-800 hover:border-amber-200"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <StarIcon size={20} className={isFeatured ? "text-amber-600" : "text-gray-400"} fill={isFeatured ? "currentColor" : "none"} />
+                <div>
+                  <p className="text-sm font-bold">Destacar Producto</p>
+                  <p className="text-[10px] text-gray-400">Mostrar en secciones especiales</p>
+                </div>
+              </div>
+              <div className={cn(
+                "h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all",
+                isFeatured ? "bg-amber-600 border-amber-600" : "border-gray-200"
+              )}>
+                {isFeatured && <CheckmarkCircle01Icon size={12} className="text-white" />}
+              </div>
+            </div>
           </div>
         </section>
 

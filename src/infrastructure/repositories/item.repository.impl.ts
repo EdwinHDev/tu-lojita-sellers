@@ -1,6 +1,6 @@
 import { axiosClient } from "../http/axios.client";
 import { IItemRepository } from "../../domain/repositories/item.repository.interface";
-import { Item, CreateItemPayload } from "../../domain/entities/item.entity";
+import { Item, CreateItemPayload, ItemFilters, PaginatedItemsResponse } from "../../domain/entities/item.entity";
 
 /**
  * Implementación de IItemRepository usando axiosClient.
@@ -13,6 +13,13 @@ export class ItemRepositoryImpl implements IItemRepository {
 
   async findByStoreId(storeId: string): Promise<Item[]> {
     const response = await axiosClient.get<Item[]>(`/items/store/${storeId}`);
+    return response.data;
+  }
+
+  async findAll(filters: ItemFilters): Promise<PaginatedItemsResponse> {
+    const response = await axiosClient.get<PaginatedItemsResponse>("/items", {
+      params: filters,
+    });
     return response.data;
   }
 

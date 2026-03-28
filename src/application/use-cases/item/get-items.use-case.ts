@@ -1,5 +1,5 @@
 import { IItemRepository } from "../../../domain/repositories/item.repository.interface";
-import { Item } from "../../../domain/entities/item.entity";
+import { Item, ItemFilters, PaginatedItemsResponse } from "../../../domain/entities/item.entity";
 
 /**
  * Use Case: GetItems
@@ -8,8 +8,8 @@ import { Item } from "../../../domain/entities/item.entity";
 export class GetItemsUseCase {
   constructor(private readonly repository: IItemRepository) {}
 
-  async execute(storeId: string): Promise<Item[]> {
+  async execute(storeId: string, filters: Partial<ItemFilters> = {}): Promise<PaginatedItemsResponse> {
     if (!storeId) throw new Error("El ID de la tienda es requerido.");
-    return this.repository.findByStoreId(storeId);
+    return this.repository.findAll({ ...filters, storeId });
   }
 }

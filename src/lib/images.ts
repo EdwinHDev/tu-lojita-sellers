@@ -16,9 +16,16 @@ interface OptimizeOptions {
 export function getOptimizedImageUrl(url: string | undefined, options: OptimizeOptions = {}): string {
   if (!url) return "";
 
-  // If the URL already contains query parameters, or isn't from our processor, return as is
-  // (Assuming our internal URLs start with /img/ or the processor prefix)
-  if (!url.includes("/img/")) return url;
+  // Handle relative paths from our image server
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL_IMAGES || "http://localhost:4200";
+  let finalUrl = url;
+
+  if (url.startsWith("/img/")) {
+    finalUrl = `${baseUrl}${url}`;
+  } else if (!url.includes("/img/")) {
+    // If it's not our image server format, return as is (external URLs)
+    return url;
+  }
 
   const { width, height, quality, format } = options;
   const params = new URLSearchParams();
@@ -29,7 +36,7 @@ export function getOptimizedImageUrl(url: string | undefined, options: OptimizeO
   if (format) params.append("fmt", format);
 
   const queryString = params.toString();
-  return queryString ? `${url}?${queryString}` : url;
+  return queryString ? `${finalUrl}?${queryString}` : finalUrl;
 }
 
 /**
