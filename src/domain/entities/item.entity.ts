@@ -10,6 +10,17 @@ export enum ItemType {
 }
 
 /**
+ * Tipos de precio para un item.
+ */
+export enum PriceType {
+  FIXED = 'FIXED',
+  STARTING_AT = 'STARTING_AT',
+  NEGOTIABLE = 'NEGOTIABLE',
+  ON_DEMAND = 'ON_DEMAND',
+  FREE = 'FREE',
+}
+
+/**
  * Atributos dinámicos base.
  */
 export interface BaseAttributes {
@@ -71,6 +82,7 @@ export interface Item {
   stockQuantity?: number;
   requiresBooking: boolean;
   isFeatured: boolean;
+  priceType: PriceType;
   discountPrice?: number;
   attributes: ItemAttributes;
   storeId: string;
@@ -97,6 +109,7 @@ export interface CreateItemPayload {
   stockQuantity?: number;
   requiresBooking?: boolean;
   isFeatured?: boolean;
+  priceType: PriceType;
   discountPrice?: number;
   attributes?: ItemAttributes;
 }

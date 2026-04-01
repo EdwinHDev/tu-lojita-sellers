@@ -34,9 +34,7 @@ export default function ConfiguracionPage() {
       <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white/50 backdrop-blur-md px-4 dark:bg-black/40 z-10 sticky top-0">
         <div className="flex items-center gap-2">
           <Tooltip>
-            <TooltipTrigger className="-ml-1">
-              <SidebarTrigger />
-            </TooltipTrigger>
+            <TooltipTrigger render={<SidebarTrigger className="-ml-1" />} />
             <TooltipContent side="bottom" align="start" className="font-bold">
               Menú Lateral
             </TooltipContent>

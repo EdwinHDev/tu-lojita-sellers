@@ -1,5 +1,5 @@
 import { IItemRepository } from "../../../domain/repositories/item.repository.interface";
-import { Item, CreateItemPayload } from "../../../domain/entities/item.entity";
+import { Item, CreateItemPayload, PriceType } from "../../../domain/entities/item.entity";
 
 /**
  * Use Case: CreateItem
@@ -14,6 +14,17 @@ export class CreateItemUseCase {
     if (!payload.description.trim()) throw new Error("La descripción es requerida.");
     if (!payload.images || payload.images.length === 0) {
       throw new Error("Debe proporcionar al menos una imagen.");
+    }
+
+    // Lógica de Precios
+    if (payload.priceType === PriceType.FREE) {
+      payload.price = 0;
+    }
+
+    if (payload.priceType === PriceType.FIXED || payload.priceType === PriceType.STARTING_AT) {
+      if (payload.price === undefined || payload.price < 0) {
+        throw new Error("El precio debe ser 0 o mayor para este tipo de oferta.");
+      }
     }
 
     // Lógica específica por tipo

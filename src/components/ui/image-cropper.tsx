@@ -4,12 +4,13 @@ import React, { useState, useCallback } from "react";
 import Cropper, { Area, Point } from "react-easy-crop";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Image01Icon,
   ZoomIcon,
   RotateRight01Icon,
   CheckmarkCircle01Icon,
   Cancel01Icon,
-  Upload01Icon
+  Upload01Icon,
+  PlusSignIcon,
+  ImageAdd01Icon,
 } from "hugeicons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -159,13 +160,13 @@ export function ImageCropper({
           backgroundColor
         );
         const url = URL.createObjectURL(croppedFile);
-        
+
         if (!hidePreviewAfterCrop) {
           setPreviewUrl(url);
         } else {
           setPreviewUrl(null);
         }
-        
+
         onCropComplete(croppedFile);
         setIsCropping(false);
         setImageSrc(null); // Reset source to allow re-uploading the same file if needed
@@ -176,9 +177,9 @@ export function ImageCropper({
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={cn("w-full h-full", className)}>
       {/* Trigger / Preview Area */}
-      <div className="relative group max-w-[260px] mx-auto">
+      <div className="relative group w-full h-full">
         <input
           type="file"
           accept="image/*"
@@ -190,32 +191,50 @@ export function ImageCropper({
         <label
           htmlFor="image-input"
           className={cn(
-            "flex flex-col items-center justify-center w-full aspect-square rounded-2xl border-2 border-dashed transition-all overflow-hidden group",
-            disabled 
-              ? "border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 cursor-not-allowed opacity-50" 
-              : "border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:border-indigo-500/50 cursor-pointer"
+            "relative flex flex-col items-center justify-center w-full h-full rounded-xl border-2 border-dashed transition-all overflow-hidden group cursor-pointer",
+            disabled
+              ? "border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 opacity-50"
+              : "border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 hover:border-indigo-200 dark:hover:border-indigo-800 shadow-sm"
           )}
         >
           {previewUrl ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <div className="flex flex-col items-center gap-2 text-white">
-                  <Upload01Icon size={24} />
-                  <span className="text-xs font-bold uppercase tracking-wider">Cambiar</span>
+              <img src={previewUrl} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-indigo-950/60 backdrop-blur-xl opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3 text-white scale-90 group-hover:scale-100 transition-all">
+                  <div className="p-3 bg-white/10 rounded-lg border border-white/20 shadow-2xl">
+                    <Upload01Icon size={24} strokeWidth={3} />
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-[0.3em] drop-shadow-md text-white/80">Update Asset</span>
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center gap-3 text-gray-400 dark:text-gray-600 group-hover:text-indigo-500 transition-colors">
-              <div className="h-12 w-12 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm group-hover:shadow-indigo-500/10 group-hover:scale-110 transition-all">
-                <Upload01Icon size={24} />
-              </div>
-              <div className="text-center px-4">
-                <p className="text-sm font-black uppercase tracking-tight">{label}</p>
-                <p className="text-[10px] font-medium mt-1">PNG, JPG o WEBP</p>
-              </div>
+            <div className="relative inset-0 flex items-center justify-center w-full h-full transition-all duration-500">
+               {/* Technical Lens Rings */}
+               <div className="h-20 w-20 rounded-full border border-indigo-600/10 flex items-center justify-center transition-all duration-700 group-hover:scale-150 group-hover:border-indigo-600/30 group-hover:bg-indigo-600/5">
+                  {/* Focus Dots */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 h-1.5 w-1.5 bg-indigo-600/40 rounded-full group-hover:bg-indigo-600 group-hover:shadow-[0_0_10px_#4f46e5]" />
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-1 w-1 bg-slate-300 dark:bg-slate-700 rounded-full" />
+                  
+                  {/* Rotating Lock */}
+                  <motion.div 
+                    animate={{ rotate: 360 }} 
+                    transition={{ repeat: Infinity, duration: 15, ease: "linear" }}
+                    className="absolute inset-[2px] border border-t-indigo-600 border-r-transparent border-b-transparent border-l-transparent rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
+
+                  <div className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white rounded-lg shadow-sm transition-all duration-500 group-hover:rotate-12 group-hover:shadow-xl group-hover:shadow-indigo-600/20">
+                     <ImageAdd01Icon size={28} strokeWidth={2} />
+                  </div>
+               </div>
+
+               {/* Pro Labeling */}
+               <div className="absolute bottom-4 inset-x-0 flex flex-col items-center gap-1 opacity-20 group-hover:opacity-100 transition-all duration-500">
+                  <p className="text-[7px] font-black uppercase tracking-[0.5em] text-slate-500 dark:text-slate-400">Capture Unit</p>
+                  <p className="text-[6px] font-bold text-slate-300 dark:text-slate-600 tracking-widest">PRO SENSOR v2.0</p>
+               </div>
             </div>
           )}
         </label>
@@ -228,13 +247,13 @@ export function ImageCropper({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-9999 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl"
+              className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-xl overflow-hidden shadow-2xl"
             >
               {/* Cropper Area */}
               <div className="relative h-[350px] bg-neutral-200 dark:bg-slate-800">
@@ -249,7 +268,7 @@ export function ImageCropper({
                   onZoomChange={onZoomChange}
                   onRotationChange={onRotationChange}
                   classes={{
-                    containerClassName: "rounded-t-3xl bg-neutral-200 dark:bg-slate-800",
+                    containerClassName: "rounded-t-xl bg-neutral-200 dark:bg-slate-800",
                     mediaClassName: "max-h-full",
                   }}
                 />
@@ -301,14 +320,14 @@ export function ImageCropper({
                     variant="ghost"
                     size="lg"
                     onClick={() => setIsCropping(false)}
-                    className="rounded-2xl font-bold gap-2 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/20"
+                    className="rounded-lg font-bold gap-2 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/20"
                   >
                     <Cancel01Icon size={18} /> Cancelar
                   </Button>
                   <Button
                     size="lg"
                     onClick={handleConfirmCrop}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl px-8 font-bold gap-2 shadow-xl shadow-indigo-600/20"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-8 font-bold gap-2 shadow-xl shadow-indigo-600/20"
                   >
                     <CheckmarkCircle01Icon size={18} strokeWidth={2.5} /> Confirmar Recorte
                   </Button>

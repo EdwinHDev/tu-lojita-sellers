@@ -5,6 +5,7 @@ export interface HasStoreResponse {
   hasStore: boolean;
   storeId: string | null;
   storeName: string | null;
+  storeLogo?: string | null;
 }
 
 export interface CreateStoreAddressPayload {

@@ -4,16 +4,17 @@ import type { NextRequest } from "next/server";
 export function proxy(request: NextRequest) {
   // Comprobación rápida en el Edge de Next.js
   const hasAccessToken = request.cookies.has("access_token");
+  const hasRefreshToken = request.cookies.has("refresh_token");
   
   // Lista de rutas que requieren autenticación
   const isProtectedRoute = 
     request.nextUrl.pathname.startsWith("/tienda") ||
     request.nextUrl.pathname.startsWith("/crear-tienda");
 
-  if (isProtectedRoute && !hasAccessToken) {
-    // Si no hay token de acceso (incluso si hay de refresh), redirigimos 
-    // a la base para que no haya latencia visual ni flashazo de contenido. 
-    // El refresh token operará de todos modos allí si fuera válido.
+  // Redirigimos solo si AMBOS tokens faltan. 
+  // Si falta solo el access_token, dejamos pasar para que el Interceptor de Axios 
+  // en el cliente intente el refresco automático al primer fetch.
+  if (isProtectedRoute && !hasAccessToken && !hasRefreshToken) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 

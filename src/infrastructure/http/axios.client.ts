@@ -84,22 +84,25 @@ axiosClient.interceptors.response.use(
           throw new Error("No refresh token available");
         }
 
-        // Renovar usando Axios neutro para evitar un bucle
-        const response = await axios.post(`${API_URL}/auth/refresh`, {
-          refreshToken,
+        // 🛡️ REGLA CRÍTICA: El backend espera un GET con el Refresh Token en el header de Authorization
+        const response = await axios.get(`${API_URL}/auth/refresh`, {
+          headers: {
+            Authorization: `Bearer ${refreshToken}`,
+          },
         });
 
-        const newAccessToken = response.data?.access_token || response.data?.accessToken;
-        const newRefreshToken = response.data?.refresh_token || response.data?.refreshToken;
+        const newAccessToken = response.data?.accessToken || response.data?.access_token || response.data?.token;
+        const newRefreshToken = response.data?.refreshToken || response.data?.refresh_token;
 
         if (!newAccessToken) {
           throw new Error("Invalid refresh backend response");
         }
 
-        // Actualizamos Cookies
+        // Actualizamos Cookies con path explícito para evitar duplicidad de cookies por ruta
         const cookieOptions: Cookies.CookieAttributes = {
           secure: process.env.NODE_ENV === "production",
-          sameSite: "Lax"
+          sameSite: "Lax",
+          path: "/"
         };
 
         Cookies.set("access_token", newAccessToken, cookieOptions);
@@ -107,8 +110,7 @@ axiosClient.interceptors.response.use(
           Cookies.set("refresh_token", newRefreshToken, cookieOptions);
         }
 
-        // 🛡️ REGLA CRÍTICA: Desbloqueamos el flag ANTES de procesar la cola 
-        // para que las peticiones que se reintentan NO se vuelvan a encolar.
+        // Desbloqueamos el flag ANTES de procesar la cola
         isRefreshing = false;
 
         // Procesamos la cola retenida

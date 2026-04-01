@@ -21,7 +21,9 @@ import {
 import { cn } from "@/lib/utils";
 import { AuthRepositoryImpl } from "@/infrastructure/repositories/auth.repository.impl";
 import { SidebarNavItem } from "@/components/sidebar/nav-item";
+import { useStoreCheck } from "@/hooks/use-store-check";
 import { navMain, navSecondary } from "@/components/sidebar/config/navigation";
+import { getOptimizedImageUrl, IMAGE_PRESETS } from "@/lib/images";
 
 // ─── Entrance animation variants ──────────────────────────────────────────────
 const containerVariants = {
@@ -47,6 +49,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const authRepository = new AuthRepositoryImpl();
 
+  const { storeName, storeLogo, status } = useStoreCheck();
+
   const handleLogout = () => {
     authRepository.logout();
     router.replace("/");
@@ -60,17 +64,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              className="bg-transparent! hover:bg-transparent!"
+              className="bg-transparent! hover:bg-transparent! pointer-events-none"
               render={(props) => <div {...props} />}
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
-                <Store01Icon size={18} strokeWidth={2} />
+              <div className="flex aspect-square size-9 items-center justify-center rounded-xl bg-indigo-600 text-white overflow-hidden shadow-sm ring-1 ring-black/5 dark:ring-white/10">
+                {storeLogo ? (
+                  <img 
+                    src={getOptimizedImageUrl(storeLogo, IMAGE_PRESETS.LOGO)} 
+                    alt={storeName || "Store Logo"} 
+                    className="size-full object-cover" 
+                  />
+                ) : (
+                  <Store01Icon size={20} strokeWidth={2} />
+                )}
               </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate text-[10px] font-bold uppercase tracking-widest opacity-40">
-                  Tu Lojita
+              <div className="grid flex-1 text-left text-sm leading-tight ml-1">
+                <span className="truncate text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                  {status === "checking" ? "Cargando..." : (storeName || "Tu Lojita")}
                 </span>
-                <span className="truncate text-[13px] font-bold">Sellers Panel</span>
+                <span className="truncate text-[13px] font-black text-gray-900 dark:text-white mt-0.5">Tienda</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>

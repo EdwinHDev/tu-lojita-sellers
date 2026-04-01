@@ -1,21 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { 
-  PackageIcon, 
-  PlusSignIcon, 
-  ShoppingBasket01Icon, 
-  ZapIcon, 
-  Search01Icon, 
+import { useState, useEffect, useMemo } from "react";
+import {
+  PackageIcon,
+  PlusSignIcon,
+  ShoppingBasket01Icon,
+  ZapIcon,
+  Search01Icon,
   MoreHorizontalIcon,
   StarIcon,
-  Ticket01Icon
+  Ticket01Icon,
+  Delete02Icon,
+  PencilEdit01Icon,
+  Sorting05Icon,
+  FilterIcon,
+  InformationCircleIcon,
+  Refresh01Icon,
+  PackageAdd01Icon
 } from "hugeicons-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence, Variants } from "framer-motion";
+
+
 import { Button } from "@/components/ui/button";
 import { useStoreCheck } from "@/hooks/use-store-check";
+import { useIsXl } from "@/hooks/use-breakpoints";
 import { ItemRepositoryImpl } from "@/infrastructure/repositories/item.repository.impl";
 import { GetItemsUseCase } from "@/application/use-cases/item/get-items.use-case";
-import { Item, ItemType } from "@/domain/entities/item.entity";
+import { Item, ItemType, PriceType } from "@/domain/entities/item.entity";
 import { CreateItemForm } from "@/components/inventario/create-item-form";
 import { ColumnSelector, ColumnConfig } from "@/components/inventario/column-selector";
 import { getOptimizedImageUrl, IMAGE_PRESETS } from "@/lib/images";
@@ -31,40 +43,89 @@ import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+import { Card, CardContent } from "@/components/ui/card";
 
 const itemRepository = new ItemRepositoryImpl();
 const getItemsUseCase = new GetItemsUseCase(itemRepository);
 
+interface StatCard {
+  label: string;
+  value: number | string;
+  icon: any;
+  color: string;
+  sub?: string;
+}
+
+
 const DEFAULT_COLUMNS: ColumnConfig[] = [
-  { id: "item", label: "Item", visible: true, alwaysVisible: true },
-  { id: "type", label: "Tipo", visible: true },
-  { id: "category", label: "Categoría", visible: true },
-  { id: "price", label: "Precio", visible: true },
-  { id: "stock", label: "Stock", visible: true },
-  { id: "marketing", label: "Promoción", visible: true },
+  { id: "item", label: "Item / Detalle", visible: true, alwaysVisible: true },
+  { id: "type", label: "Categorización", visible: true },
+  { id: "price", label: "Precio y Oferta", visible: true },
+  { id: "stock", label: "Existencias", visible: true },
   { id: "actions", label: "Acciones", visible: true, alwaysVisible: true },
 ];
 
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05 }
+  }
+};
+
+const cardVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring", stiffness: 300, damping: 25 }
+  }
+};
+
+
 export default function InventarioPage() {
   const { storeId } = useStoreCheck();
-  const [items, setItems] = useState<Item[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const isXl = useIsXl();
+  const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
+  const [filterType, setFilterType] = useState<ItemType | "ALL">("ALL");
 
-  // Persistence for user preferences
+  // Debounce search term
   useEffect(() => {
-    const saved = localStorage.getItem("inventory_columns_v1");
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("inventory_columns_v2");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Sync with default to ensure new columns are added if we update the app
-        const synced = DEFAULT_COLUMNS.map(def => {
-          const match = parsed.find((p: ColumnConfig) => p.id === def.id);
-          return match ? { ...def, visible: match.visible } : def;
-        });
-        setColumns(synced);
+        setColumns(parsed);
       } catch (e) {
         console.error("Error loading column preferences");
       }
@@ -73,288 +134,485 @@ export default function InventarioPage() {
 
   const handleColumnsChange = (newColumns: ColumnConfig[]) => {
     setColumns(newColumns);
-    localStorage.setItem("inventory_columns_v1", JSON.stringify(newColumns));
+    localStorage.setItem("inventory_columns_v2", JSON.stringify(newColumns));
   };
 
   const isVisible = (id: string) => columns.find(c => c.id === id)?.visible;
 
-  const fetchItems = async () => {
-    if (!storeId) return;
-    try {
-      setIsLoading(true);
+  // TanStack Query for items
+  const { data: items = [], isLoading, isFetching, refetch } = useQuery({
+    queryKey: ["inventory", storeId, debouncedSearch],
+    queryFn: async () => {
+      if (!storeId) return [];
       const response = await getItemsUseCase.execute(storeId, {
-        q: searchTerm || undefined,
-        limit: 50,
+        q: debouncedSearch || undefined,
+        limit: 100,
       });
-      setItems(response.data);
-    } catch (error) {
-      console.error("Error fetching items:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return response.data;
+    },
+    enabled: !!storeId,
+  });
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchItems();
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [storeId, searchTerm]);
+  // Derived Stats
+  const stats = useMemo(() => {
+    const total = items.length;
+    const lowStock = items.filter(i => i.trackInventory && (i.stockQuantity || 0) < 5).length;
+    const productsCount = items.filter(i => i.itemType === ItemType.PRODUCT).length;
+    const servicesCount = items.filter(i => i.itemType === ItemType.SERVICE).length;
+    const itemsInOffer = items.filter(i => i.discountPrice).length;
+
+    return { total, lowStock, productsCount, servicesCount, itemsInOffer };
+  }, [items]);
+
+  // Filtering Logic
+  const filteredItems = useMemo(() => {
+    return items.filter(item => {
+      if (filterType === "ALL") return true;
+      return item.itemType === filterType;
+    });
+  }, [items, filterType]);
+
+  // Delete Mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await itemRepository.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+    },
+  });
 
   return (
-    <div className="flex flex-col h-full bg-gray-50/50 dark:bg-black/20">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white/50 backdrop-blur-md px-4 dark:bg-black/40 z-10 sticky top-0">
-        <div className="flex items-center gap-2">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-black/20 transition-colors duration-300">
+      {/* ─── Premium Header ─── */}
+      <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white/70 backdrop-blur-xl px-6 dark:bg-slate-950/80 z-20 sticky top-0 border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-3">
           <Tooltip>
-            <TooltipTrigger className="-ml-1">
-              <SidebarTrigger />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="start" className="font-bold">
-              Menú Lateral
-            </TooltipContent>
+            <TooltipTrigger render={<SidebarTrigger className="-ml-1 text-slate-500 hover:text-indigo-600 transition-colors" />} />
+            <TooltipContent side="bottom" align="start" className="font-bold">Menú Lateral</TooltipContent>
           </Tooltip>
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <div className="flex items-center gap-2 px-4 text-sm font-medium text-gray-500">
-            <span>Tienda</span>
-            <span className="text-gray-300">/</span>
-            <span className="text-gray-900 dark:text-white font-bold">Inventario</span>
-          </div>
+          <Separator orientation="vertical" className="h-4 bg-slate-200 dark:bg-slate-800" />
+          <nav className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+            <span className="hover:text-indigo-600 cursor-pointer transition-colors">Tienda</span>
+            <span className="text-slate-300 dark:text-slate-700">/</span>
+            <span className="text-indigo-600 dark:text-indigo-400">Inventario</span>
+          </nav>
         </div>
         <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            iconSize="lg"
+            onClick={() => refetch()}
+            className={cn("rounded-xl text-slate-500 hover:bg-white dark:hover:bg-slate-800", isFetching && "animate-spin text-indigo-600")}
+          >
+            <Refresh01Icon size={20} />
+          </Button>
           <ThemeToggle />
         </div>
       </header>
 
-      <div className="flex-1 space-y-8 p-4 sm:p-8 overflow-y-auto custom-scrollbar">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 space-y-8">
+
+        {/* ─── Page Title ─── */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="space-y-1">
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-gray-900 dark:text-white">Inventario</h2>
-            <p className="text-xs sm:text-sm text-gray-500 font-medium">Administra tus productos, servicios y stock en tiempo real.</p>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+              Gestión de Inventario
+              <span className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse hidden sm:inline-block" />
+            </h1>
+            <p className="text-xs sm:text-sm lg:text-base text-slate-500 font-medium">Controla el stock, precios y promociones de tu catálogo digital.</p>
           </div>
-          <Button 
+          <Button
             onClick={() => setIsDialogOpen(true)}
-            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 px-6 rounded-2xl shadow-xl shadow-indigo-600/20 transition-all active:scale-95 gap-2"
+            size="lg"
+            iconSize="lg"
+            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black h-14 px-8 rounded-2xl shadow-2xl shadow-indigo-600/30 transition-all hover:-translate-y-1 active:scale-95 gap-3"
           >
-            <PlusSignIcon size={18} strokeWidth={2.5} />
-            Crear Item
+            <PlusSignIcon size={20} />
+            Crear Nuevo Item
           </Button>
         </div>
 
-        <div className="flex items-center gap-3 sm:gap-4">
-          <div className="flex-1 flex items-center gap-3 bg-white dark:bg-gray-900 p-2 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/5">
-            <div className="pl-3 text-gray-400">
-              <Search01Icon size={20} />
-            </div>
-            <input 
-              type="text" 
-              placeholder="Buscar por nombre o descripción..." 
+        {/* ─── Stats Section ─── */}
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
+        >
+          {[
+            { label: "Total Catálogo", value: stats.total, icon: PackageIcon, color: "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30" },
+            { label: "Alerta Stock", value: stats.lowStock, icon: InformationCircleIcon, color: "bg-red-50 text-red-600 dark:bg-red-950/30", sub: "Menos de 5 unid." },
+            { label: "Servicios", value: stats.servicesCount, icon: ZapIcon, color: "bg-purple-50 text-purple-600 dark:bg-purple-950/30" },
+            { label: "En Oferta", value: stats.itemsInOffer, icon: Ticket01Icon, color: "bg-amber-50 text-amber-600 dark:bg-amber-950/30" },
+          ].map((stat: StatCard, idx) => (
+
+            <motion.div key={idx} variants={cardVariants}>
+              <Card className="border-none shadow-sm hover:shadow-md transition-shadow group cursor-default h-full">
+                <CardContent className="p-6 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{stat.label}</p>
+                    <h3 className="text-3xl font-black text-slate-900 dark:text-white leading-none">
+                      {isLoading ? <Skeleton className="h-8 w-12" /> : stat.value}
+                    </h3>
+                    {stat.sub && <p className="text-[10px] font-bold text-red-500/80">{stat.sub}</p>}
+                  </div>
+                  <div className={cn("h-14 w-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 duration-500", stat.color)}>
+                    <stat.icon size={28} />
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </motion.div>
+
+        {/* ─── Advanced Toolbar ─── */}
+        <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-4 bg-white/50 dark:bg-slate-900/50 p-3 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 backdrop-blur-sm shadow-sm group/toolbar overflow-hidden w-full">
+          <div className="relative w-full xl:w-80 transition-all duration-300 focus-within:xl:w-96">
+            <Search01Icon size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Busca por nombre, descripción o SKU..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 bg-transparent border-none outline-none text-sm font-medium py-2"
+              className="w-full bg-slate-100 dark:bg-slate-800/50 border-none rounded-xl pl-12 pr-4 h-11 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none"
             />
           </div>
-          <ColumnSelector columns={columns} onChange={handleColumnsChange} />
-        </div>
 
-        {isLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <Skeleton key={i} className="h-24 w-full rounded-2xl" />
-            ))}
-          </div>
-        ) : items.length === 0 ? (
-          <div className="flex h-[450px] shrink-0 items-center justify-center rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
-            <div className="mx-auto flex max-w-[420px] flex-col items-center justify-center text-center p-8">
-              <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-indigo-50 dark:bg-indigo-950/30 mb-6 group">
-                <PackageIcon className="h-12 w-12 text-indigo-400 group-hover:scale-110 transition-transform duration-500" />
+          <Separator orientation="vertical" className="hidden xl:block h-8 my-auto opacity-50" />
+
+          {/* Wrapper for Filters and Actions on Mobile */}
+          <div className="flex flex-row items-center justify-between w-full xl:contents">
+            {/* Mobile Scrollable Filters */}
+            <div className="w-auto xl:w-auto overflow-x-auto no-scrollbar py-0.5">
+              <div className="flex items-center gap-2 min-w-max xl:min-w-0">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant={filterType === "ALL" ? "default" : (isXl ? "ghost" : "outline")}
+                        onClick={() => setFilterType("ALL")}
+                        size={isXl ? "lg" : "icon-xl"}
+                        iconSize="md"
+                        className={cn("rounded-xl font-bold shrink-0", filterType === "ALL" ? "bg-indigo-600 shadow-lg shadow-indigo-600/20 text-white" : "text-slate-500", isXl && "px-4")}
+                      >
+                        <PackageIcon
+                          {...(isXl && { "data-icon": "inline-start" })}
+                        />
+                        {isXl && <span>Todos</span>}
+                      </Button>
+                    }
+                  />
+                  <TooltipContent className="font-bold">Todos los Items</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant={filterType === ItemType.PRODUCT ? "default" : (isXl ? "ghost" : "outline")}
+                        onClick={() => setFilterType(ItemType.PRODUCT)}
+                        size={isXl ? "lg" : "icon-xl"}
+                        iconSize="md"
+                        className={cn("rounded-xl font-bold shrink-0", filterType === ItemType.PRODUCT ? "bg-indigo-600 shadow-lg shadow-indigo-600/20 text-white" : "text-slate-500", isXl && "px-4")}
+                      >
+                        <ShoppingBasket01Icon
+                          {...(isXl && { "data-icon": "inline-start" })}
+                        />
+                        {isXl && <span>Productos</span>}
+                      </Button>
+                    }
+                  />
+                  <TooltipContent className="font-bold">Filtrar por Productos</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant={filterType === ItemType.SERVICE ? "default" : (isXl ? "ghost" : "outline")}
+                        onClick={() => setFilterType(ItemType.SERVICE)}
+                        size={isXl ? "lg" : "icon-xl"}
+                        iconSize="md"
+                        className={cn("rounded-xl font-bold shrink-0", filterType === ItemType.SERVICE ? "bg-indigo-600 shadow-lg shadow-indigo-600/20 text-white" : "text-slate-500", isXl && "px-4")}
+                      >
+                        <ZapIcon
+                          {...(isXl && { "data-icon": "inline-start" })}
+                        />
+                        {isXl && <span>Servicios</span>}
+                      </Button>
+                    }
+                  />
+                  <TooltipContent className="font-bold">Filtrar por Servicios</TooltipContent>
+                </Tooltip>
               </div>
-              <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Tu escaparate está vacío</h3>
-              <p className="mt-3 text-sm text-gray-500 font-medium leading-relaxed">
-                Comienza agregando productos físicos o servicios profesionales para que tus clientes puedan comprarlos.
-              </p>
-              <Button 
-                onClick={() => setIsDialogOpen(true)}
-                variant="outline" 
-                className="mt-8 rounded-xl border-gray-200 dark:border-gray-800 font-bold hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                Cargar mi primer producto
-              </Button>
+            </div>
+
+            <div className="xl:ml-auto flex items-center gap-3 w-auto sm:w-auto overflow-x-auto no-scrollbar xl:overflow-visible py-0.5">
+              <ColumnSelector columns={columns} onChange={handleColumnsChange} />
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size={isXl ? "lg" : "icon-xl"}
+                      iconSize="md"
+                      className={cn("rounded-xl font-bold text-slate-600 hover:bg-slate-50 shrink-0", isXl && "px-4")}
+                    >
+                      <Sorting05Icon
+                        {...(isXl && { "data-icon": "inline-start" })}
+                      />
+                      {isXl && <span>Ordenar</span>}
+                    </Button>
+                  }
+                />
+                <TooltipContent className="font-bold">Ordenar Catálogo</TooltipContent>
+              </Tooltip>
             </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto rounded-3xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm custom-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[700px] lg:min-w-full">
-              <thead>
-                <tr className="border-b border-gray-50 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
-                  {columns.filter(c => c.visible).map((col) => (
-                    <th 
-                      key={col.id} 
-                      className={cn(
-                        "px-4 sm:px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400",
-                        col.id === "price" && "text-right sm:text-left",
-                        col.id === "stock" && "text-center",
-                        col.id === "actions" && "text-right"
-                      )}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id} className="group hover:bg-gray-50/50 dark:hover:bg-indigo-950/5 transition-colors">
-                    {isVisible("item") && (
-                      <td className="px-4 sm:px-6 py-4 sm:py-5">
-                        <div className="flex items-center gap-3 sm:gap-4">
-                          <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden shrink-0 border border-gray-100 dark:border-gray-800">
-                            {item.mainImage ? (
-                              <img 
-                                src={getOptimizedImageUrl(item.mainImage, IMAGE_PRESETS.THUMBNAIL_MD)} 
-                                alt="" 
-                                className="h-full w-full object-cover" 
-                              />
-                            ) : (
-                              <div className="h-full w-full flex items-center justify-center">
-                                <PackageIcon size={16} className="text-gray-300" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate max-w-[120px] sm:max-w-none">{item.title}</p>
-                            <p className="hidden sm:block text-[10px] font-medium text-gray-400 truncate max-w-[200px]">{item.description}</p>
-                          </div>
-                        </div>
-                      </td>
-                    )}
+        </div>
 
-                    {isVisible("type") && (
-                      <td className="px-6 py-5">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight
-                          ${item.itemType === ItemType.PRODUCT 
-                            ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" 
-                            : "bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"}`}
-                        >
-                          {item.itemType === ItemType.PRODUCT ? <ShoppingBasket01Icon size={12} /> : <ZapIcon size={12} />}
-                          {item.itemType}
-                        </span>
-                      </td>
-                    )}
+        {/* ─── Data Section ─── */}
+        <div className="bg-white dark:bg-slate-950 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl shadow-indigo-600/5 overflow-hidden min-h-[500px]">
+          {isLoading ? (
+            <div className="p-8 space-y-6">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="flex items-center gap-6 animate-pulse">
+                  <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-900" />
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 w-1/3 bg-slate-100 dark:bg-slate-900 rounded-lg" />
+                    <div className="h-3 w-1/4 bg-slate-50 dark:bg-slate-900/50 rounded-lg" />
+                  </div>
+                  <div className="h-10 w-24 bg-slate-50 dark:bg-slate-900 rounded-lg" />
+                </div>
+              ))}
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <AnimatePresence>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center justify-center p-20 text-center space-y-6"
+              >
+                <div className="h-32 w-32 rounded-3xl bg-slate-50 dark:bg-slate-900 flex items-center justify-center relative group">
+                  <div className="absolute inset-0 bg-indigo-500/10 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <PackageIcon size={64} className="text-slate-300 dark:text-slate-700" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">Tu escaparate está esperando</h3>
+                  <p className="text-sm text-slate-500 max-w-sm mx-auto font-medium">Añade productos o servicios para que tus clientes puedan empezar a comprar en tu tienda "Tu Lojita".</p>
+                </div>
+                <Button
+                  onClick={() => setIsDialogOpen(true)}
+                  className="gap-2 bg-indigo-600 hover:bg-slate-900 dark:hover:bg-white dark:hover:text-slate-950 font-bold px-8 py-6 rounded-2xl transition-all text-white"
+                >
+                  <PackageAdd01Icon size={20} className="text-current w-5!" />
+                  Subir mi primer item ahora
+                </Button>
 
-                    {isVisible("category") && (
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-2">
-                           <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-                           <span className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                             {item.category?.name || "Sin categoría"}
-                           </span>
-                        </div>
-                      </td>
-                    )}
-
-                    {isVisible("price") && (
-                      <td className="px-4 sm:px-6 py-5 text-right sm:text-left">
-                        <div className="flex flex-col">
-                          {item.discountPrice ? (
-                            <>
-                              <span className="text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400">
-                                ${item.discountPrice.toFixed(2)}
-                              </span>
-                              <span className="text-[10px] font-bold text-gray-400 line-through decoration-red-500/50">
-                                ${item.price.toFixed(2)}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-xs sm:text-sm font-black text-gray-900 dark:text-white">
-                              ${item.price.toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    )}
-
-                    {isVisible("stock") && (
-                      <td className="px-4 sm:px-6 py-5 text-center">
-                        {item.trackInventory ? (
-                          <span className={`text-[10px] sm:text-xs font-bold ${item.stockQuantity === 0 ? "text-red-500 animate-pulse" : "text-gray-600 dark:text-gray-400"}`}>
-                            {item.stockQuantity} <span className="hidden sm:inline">unid.</span>
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">∞</span>
+              </motion.div>
+            </AnimatePresence>
+          ) : (
+            <div className="overflow-x-auto no-scrollbar">
+              <Table>
+                <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+                  <TableRow className="hover:bg-transparent">
+                    {columns.filter(c => c.visible).map((col) => (
+                      <TableHead
+                        key={col.id}
+                        className={cn(
+                          "px-6 py-5 text-[11px] font-black uppercase tracking-[0.25em] text-slate-400",
+                          col.id === "price" && "text-right lg:text-left",
+                          col.id === "stock" && "text-center",
+                          col.id === "actions" && "text-right"
                         )}
-                      </td>
-                    )}
+                      >
+                        {col.label}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <AnimatePresence mode="popLayout">
+                    {filteredItems.map((item) => (
+                      <motion.tr
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        key={item.id}
+                        className="group hover:bg-slate-50/50 dark:hover:bg-slate-900/40 border-b border-slate-50 dark:border-slate-900/50 transition-colors cursor-default"
+                      >
+                        {isVisible("item") && (
+                          <TableCell className="px-6 py-4">
+                            <div className="flex items-center gap-4">
+                              <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-100 dark:border-slate-800 shadow-sm relative group/img">
+                                {item.mainImage ? (
+                                  <img
+                                    src={getOptimizedImageUrl(item.mainImage, IMAGE_PRESETS.THUMBNAIL_MD)}
+                                    alt={item.title}
+                                    className="h-full w-full object-cover group-hover/img:scale-125 transition-transform duration-700 ease-in-out"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center text-slate-300">
+                                    <PackageIcon size={20} />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-black text-slate-900 dark:text-white truncate group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.title}</p>
+                                <p className="text-[10px] font-bold text-slate-400 truncate max-w-[200px] uppercase tracking-wider">{item.category?.name || "Sin Categoría"}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                        )}
 
-                    {isVisible("marketing") && (
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-2">
-                          {item.isFeatured && (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <div className="p-1.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg shadow-sm border border-amber-100 dark:border-amber-900/30">
-                                  <StarIcon size={14} className="text-amber-500" fill="currentColor" />
+                        {isVisible("type") && (
+                          <TableCell className="px-6 py-4">
+                            <div className="flex items-center gap-1.5">
+                              {item.itemType === ItemType.PRODUCT ? (
+                                <Badge variant="secondary" className="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 gap-1.5 font-black uppercase text-[10px] px-2.5 py-1 rounded-lg border-none">
+                                  <ShoppingBasket01Icon size={12} strokeWidth={3} />
+                                  Producto
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="bg-purple-50 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400 gap-1.5 font-black uppercase text-[10px] px-2.5 py-1 rounded-lg border-none">
+                                  <ZapIcon size={12} strokeWidth={3} />
+                                  Servicio
+                                </Badge>
+                              )}
+                              {item.isFeatured && (
+                                <Tooltip>
+                                  <TooltipTrigger render={<div className="text-amber-500 animate-pulse"><StarIcon size={16} fill="currentColor" /></div>} />
+                                  <TooltipContent className="font-bold">Item Destacado</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
+
+                        {isVisible("price") && (
+                          <TableCell className="px-6 py-4">
+                            <div className="flex flex-col text-right lg:text-left">
+                              {item.priceType === PriceType.FREE ? (
+                                <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 font-black uppercase text-[10px] w-fit">Gratis</Badge>
+                              ) : item.priceType === PriceType.ON_DEMAND ? (
+                                <Badge variant="secondary" className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 font-black uppercase text-[10px] w-fit">A Consultar</Badge>
+                              ) : (
+                                <>
+                                  {item.discountPrice ? (
+                                    <>
+                                      <div className="flex items-center gap-1.5">
+                                        {item.priceType === PriceType.STARTING_AT && <span className="text-[9px] font-black uppercase text-indigo-400">Desde</span>}
+                                        <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                                          ${item.discountPrice.toLocaleString()}
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] font-bold text-slate-400 line-through opacity-60">
+                                        ${item.price.toLocaleString()}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 font-black text-slate-900 dark:text-white">
+                                      {item.priceType === PriceType.STARTING_AT && <span className="text-[9px] font-black uppercase text-slate-400">Desde</span>}
+                                      {item.priceType === PriceType.NEGOTIABLE && <span className="text-[9px] font-black uppercase text-slate-400">Negociable</span>}
+                                      <span className="text-sm">
+                                        ${item.price.toLocaleString()}
+                                      </span>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
+
+                        {isVisible("stock") && (
+                          <TableCell className="px-6 py-4 text-center">
+                            {item.trackInventory ? (
+                              <div className="inline-flex flex-col items-center min-w-[60px]">
+                                <span className={cn(
+                                  "text-xs font-black",
+                                  item.stockQuantity === 0 ? "text-red-500" : (item.stockQuantity || 0) < 5 ? "text-amber-500" : "text-slate-600 dark:text-slate-400"
+                                )}>
+                                  {item.stockQuantity} <span className="text-[9px] uppercase tracking-tighter">u.</span>
+                                </span>
+                                <div className="h-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-1 overflow-hidden">
+                                  <div
+                                    className={cn(
+                                      "h-full transition-all duration-1000",
+                                      item.stockQuantity === 0 ? "bg-red-500 w-0" : (item.stockQuantity || 0) < 5 ? "bg-amber-500 w-1/3" : "bg-emerald-500 w-full"
+                                    )}
+                                  />
                                 </div>
-                              </TooltipTrigger>
-                              <TooltipContent className="font-bold">Producto Destacado</TooltipContent>
-                            </Tooltip>
-                          )}
-                          {item.discountPrice && (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <div className="p-1.5 bg-red-50 dark:bg-red-950/30 rounded-lg shadow-sm border border-red-100 dark:border-red-900/30">
-                                  <Ticket01Icon size={14} className="text-red-500" />
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent className="font-bold">En Oferta Activa</TooltipContent>
-                            </Tooltip>
-                          )}
-                          {!item.isFeatured && !item.discountPrice && (
-                            <span className="text-[10px] font-bold text-gray-300">-</span>
-                          )}
-                        </div>
-                      </td>
-                    )}
+                              </div>
+                            ) : (
+                              <Badge variant="ghost" className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] bg-transparent">Unlimited</Badge>
+                            )}
+                          </TableCell>
+                        )}
 
-                    {isVisible("actions") && (
-                      <td className="px-4 sm:px-6 py-5 text-right">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
-                          <MoreHorizontalIcon size={18} className="text-gray-400" />
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        {isVisible("actions") && (
+                          <TableCell className="px-6 py-4 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                render={
+                                  <Button variant="ghost" size="icon" iconSize="lg" className="h-10 w-10 rounded-2xl hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-100 dark:hover:border-slate-800 shadow-none">
+                                    <MoreHorizontalIcon size={20} className="text-slate-400" />
+                                  </Button>
+                                }
+                              />
+                              <DropdownMenuContent align="end" className="w-56 rounded-[1.5rem] p-2 shadow-2xl shadow-indigo-600/10 border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+                                <DropdownMenuGroup>
+                                  <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-3 py-2">Opciones de Item</DropdownMenuLabel>
+                                  <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800" />
+                                  <DropdownMenuItem className="rounded-xl gap-3 font-bold py-2.5 cursor-pointer text-slate-600 dark:text-slate-300 focus:bg-indigo-50 dark:focus:bg-indigo-950/20 focus:text-indigo-600">
+                                    <PencilEdit01Icon size={20} />
+                                    Detalles y Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800" />
+                                  <DropdownMenuItem
+                                    className="rounded-xl gap-3 font-bold py-2.5 cursor-pointer text-red-500 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"
+                                    onClick={() => deleteMutation.mutate(item.id)}
+                                  >
+                                    <Delete02Icon size={20} />
+                                    Eliminar del Catálogo
+                                  </DropdownMenuItem>
+                                </DropdownMenuGroup>
+                              </DropdownMenuContent>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar p-0">
-          <DialogHeader className="p-8 border-b border-gray-50 dark:border-gray-900 bg-white/50 dark:bg-black/40 backdrop-blur-md sticky top-0 z-10 sm:text-left flex-row items-center gap-4">
-             <div className="h-12 w-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center shrink-0">
-                <PlusSignIcon size={24} className="text-indigo-600" />
-             </div>
-             <div>
-                <DialogTitle className="text-2xl font-black tracking-tight">Crear Nuevo Item</DialogTitle>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Añadir producto o servicio</p>
-             </div>
-          </DialogHeader>
-          <div className="p-8 pb-32">
+                            </DropdownMenu>
+                          </TableCell>
+                        )}
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+
+        {/* ─── Standard Dialog for Creation ─── */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="max-w-[95vw] sm:max-w-4xl p-0 bg-white dark:bg-slate-950 border-none rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-slate-200 dark:ring-white/10">
             {storeId && (
-              <CreateItemForm 
-                storeId={storeId} 
+              <CreateItemForm
+                storeId={storeId}
                 onSuccess={() => {
                   setIsDialogOpen(false);
-                  fetchItems();
-                }} 
-                onCancel={() => setIsDialogOpen(false)} 
+                  queryClient.invalidateQueries({ queryKey: ["inventory"] });
+                }}
+                onCancel={() => setIsDialogOpen(false)}
               />
             )}
-          </div>
-        </DialogContent>
-      </Dialog>
-      </div>
-    </div>
+          </DialogContent>
+        </Dialog>
+
+
+
+      </main >
+    </div >
   );
 }
