@@ -255,7 +255,7 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
                         else setValue("categoryId", val || "", { shouldValidate: true });
                       }}
                     >
-                      <SelectTrigger className="!h-16 w-full rounded-lg border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950 px-8 font-bold text-lg transition-all focus:ring-8 focus:ring-indigo-600/5 data-placeholder:text-slate-400 group/select shadow-sm">
+                      <SelectTrigger className="h-16! w-full rounded-lg border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950 px-8 font-bold text-lg transition-all focus:ring-8 focus:ring-indigo-600/5 data-placeholder:text-slate-400 group/select shadow-sm">
                         <SelectValue placeholder="Seleccione Categoría" />
                       </SelectTrigger>
                       <SelectContent
@@ -357,7 +357,7 @@ export function CreateItemForm({ storeId, onSuccess, onCancel }: CreateItemFormP
                       { label: "Gratis", value: PriceType.FREE },
                     ]}
                   >
-                    <SelectTrigger className="!h-16 w-full rounded-xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950 px-8 font-bold text-lg transition-all focus:ring-8 focus:ring-emerald-600/5 group/select shadow-sm">
+                    <SelectTrigger className="h-16! w-full rounded-xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950 px-8 font-bold text-lg transition-all focus:ring-8 focus:ring-emerald-600/5 group/select shadow-sm">
                       <SelectValue placeholder="Tipo de Precio" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl shadow-2xl bg-white/95 dark:bg-slate-950/95 backdrop-blur-3xl border-slate-100 dark:border-slate-800 p-3 min-w-[240px]">

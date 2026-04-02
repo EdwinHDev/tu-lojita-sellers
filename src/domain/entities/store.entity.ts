@@ -41,6 +41,10 @@ export interface UpdateStorePayload {
   mainAddress?: CreateStoreAddressPayload;
   logo?: string;
   subCategoryId?: string;
+  allowPartialPayments?: boolean;
+  partialPaymentsFeePercentage?: number;
+  minInitialPaymentPercentage?: number;
+  maxInstallments?: number;
 }
 
 export interface StoreAddress {
@@ -88,6 +92,12 @@ export interface Store {
   };
   createdAt: string;
   updatedAt: string;
+
+  // Pagos Parciales
+  allowPartialPayments: boolean;
+  partialPaymentsFeePercentage: number;
+  minInitialPaymentPercentage: number;
+  maxInstallments: number;
 }
 
 /**

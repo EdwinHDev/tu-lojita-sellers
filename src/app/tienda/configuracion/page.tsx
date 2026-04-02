@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  Store01Icon, 
-  Settings02Icon, 
+import {
+  Store01Icon,
+  Settings02Icon,
   Shield01Icon,
   UserCircleIcon,
-  ShoppingBasket01Icon
+  ShoppingBasket01Icon,
+  Wallet01Icon
 } from "hugeicons-react";
 import { useStoreCheck } from "@/hooks/use-store-check";
 import { StoreProfileForm } from "@/components/configuracion/store-profile-form";
@@ -16,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { PaymentSettingsForm } from "@/components/configuracion/payment-settings-form";
 
 export default function ConfiguracionPage() {
   const { storeId } = useStoreCheck();
@@ -24,6 +26,7 @@ export default function ConfiguracionPage() {
   const tabs = [
     { id: "perfil", label: "Perfil", icon: Store01Icon },
     { id: "categorias", label: "Categorías", icon: ShoppingBasket01Icon },
+    { id: "pagos", label: "Pagos", icon: Wallet01Icon },
     { id: "seguridad", label: "Seguridad", icon: Shield01Icon },
     { id: "apariencia", label: "Apariencia", icon: UserCircleIcon },
   ];
@@ -67,7 +70,7 @@ export default function ConfiguracionPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
-                  activeTab === tab.id 
+                  activeTab === tab.id
                     ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-white shadow-sm"
                     : "text-gray-500 hover:text-gray-900 dark:hover:text-gray-300"
                 )}
@@ -84,6 +87,8 @@ export default function ConfiguracionPage() {
               <StoreProfileForm storeId={storeId} />
             ) : activeTab === "categorias" && storeId ? (
               <CategoryManagement storeId={storeId} />
+            ) : activeTab === "pagos" && storeId ? (
+              <PaymentSettingsForm storeId={storeId} />
             ) : (
               <div className="flex flex-col items-center justify-center h-[40vh] text-center space-y-4 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50">
                 <div className="h-16 w-16 rounded-2xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center text-gray-300">
