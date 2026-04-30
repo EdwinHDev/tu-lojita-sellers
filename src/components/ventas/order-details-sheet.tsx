@@ -125,7 +125,6 @@ export function OrderDetailsSheet({ order, isOpen, onClose, storeId }: OrderDeta
                   </div>
                   <div>
                     <p className="font-bold text-slate-900 dark:text-white text-sm">{order.user?.firstName} {order.user?.lastName}</p>
-                    <p className="text-xs font-medium text-slate-500">{order.user?.email}</p>
                   </div>
                 </div>
               </div>

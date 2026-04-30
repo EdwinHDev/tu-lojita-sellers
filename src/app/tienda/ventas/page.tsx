@@ -108,8 +108,7 @@ export default function VentasPage() {
     const lowerQ = debouncedSearch.toLowerCase();
     return rawOrders.filter(order => 
       order.id.toLowerCase().includes(lowerQ) ||
-      `${order.user?.firstName} ${order.user?.lastName}`.toLowerCase().includes(lowerQ) ||
-      order.user?.email.toLowerCase().includes(lowerQ)
+      `${order.user?.firstName} ${order.user?.lastName}`.toLowerCase().includes(lowerQ)
     );
   }, [rawOrders, debouncedSearch]);
 
@@ -319,7 +318,6 @@ export default function VentasPage() {
                                 </div>
                                 <div>
                                    <p className="text-sm font-black text-slate-900 dark:text-white capitalize">{order.user?.firstName} {order.user?.lastName}</p>
-                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{order.user?.email}</p>
                                    <p className="text-[9px] font-bold text-slate-300 dark:text-slate-600 tracking-wider">ID: {order.id.split('-')[0]}</p>
                                 </div>
                               </div>

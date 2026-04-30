@@ -362,12 +362,16 @@ function Step3Form({
         <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 px-1">
           Logo de tu Tienda
         </label>
-        <ImageCropper
-          onCropComplete={onFileChange}
-          initialPreviewUrl={logoPreview}
-          outputSize={{ width: 512, height: 512 }}
-          label="Sube el logo de tu negocio"
-        />
+        <div className="flex justify-center">
+          <div className="w-45 h-45">
+            <ImageCropper
+              onCropComplete={onFileChange}
+              initialPreviewUrl={logoPreview}
+              outputSize={{ width: 512, height: 512 }}
+              label="Sube el logo de tu negocio"
+            />
+          </div>
+        </div>
         <p className="text-[11px] text-gray-500 dark:text-gray-500 font-medium px-1 flex items-start gap-1.5">
           <InformationCircleIcon size={14} className="mt-0.5 shrink-0" />
           Se recomienda una imagen cuadrada. El sistema la optimizará automáticamente a 512x512px.

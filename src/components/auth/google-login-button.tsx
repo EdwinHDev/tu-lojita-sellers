@@ -7,6 +7,7 @@ import { StoreRepositoryImpl } from "@/infrastructure/repositories/store.reposit
 import { GoogleLoginUseCase } from "@/application/use-cases/auth/google-login.use-case";
 import { CheckHasStoreUseCase } from "@/application/use-cases/store/check-has-store.use-case";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export function GoogleLoginButton() {
   const [isLoading, setIsLoading] = useState(false);
@@ -34,8 +35,24 @@ export function GoogleLoginButton() {
       } else {
         router.push("/crear-tienda");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log("Login fallido:", error);
+      
+      // Detectar si es el error de COMPANY bloqueado
+      const errorReason = error?.response?.data?.reason;
+      const errorDetails = error?.response?.data?.details;
+      
+      if (errorReason === 'COMPANY_NOT_ALLOWED_ON_VENDOR_WEB') {
+        toast.error('Acceso Restringido', {
+          description: 'Ya eres un usuario empresarial, debes iniciar sesión en Tu Lojita para Empresas.',
+          duration: 8000,
+        });
+      } else {
+        toast.error('Error al iniciar sesión', {
+          description: 'Ocurrió un error inesperado. Por favor, intenta nuevamente.',
+          duration: 5000,
+        });
+      }
     } finally {
       setIsLoading(false);
     }
